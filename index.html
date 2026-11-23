@@ -1,0 +1,109 @@
+Скопируй весь код ниже и вставь в файл index.html.
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Киномастер-Ай</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 20px;
+  background: #10131c;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+.container {
+  max-width: 700px;
+  margin: auto;
+}
+h1 { color: #7c9cff; }
+.card {
+  background: #1d2332;
+  padding: 18px;
+  border-radius: 14px;
+  margin-top: 18px;
+}
+label {
+  display: block;
+  margin: 15px 0 8px;
+}
+textarea, input {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #46516a;
+  border-radius: 9px;
+  background: #101725;
+  color: white;
+  font-size: 16px;
+}
+textarea { min-height: 120px; resize: vertical; }
+button {
+  width: 100%;
+  padding: 15px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #547cff;
+  color: white;
+  font-size: 17px;
+  font-weight: bold;
+}
+#result {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🎬 Киномастер-Ай</h1>
+<p>Создавай идеи для оживления персонажей и будущих видеосцен.</p>
+<div class="card">
+<h2>Новая сцена</h2>
+<label>Название персонажа</label>
+<input id="character" placeholder="Например: Кузьма">
+<label>Описание сцены</label>
+<textarea id="scene" placeholder="Опиши, что происходит в кадре..."></textarea>
+<label>Движения персонажа</label>
+<textarea id="movement" placeholder="Например: персонаж поворачивает голову, моргает и машет лапой..."></textarea>
+<label>Стиль видео</label>
+<input id="style" value="Кинематографичный мультфильм">
+<button onclick="createScene()">Создать описание сцены</button>
+</div>
+<div class="card">
+<h2>Результат</h2>
+<div id="result">Здесь появится описание твоей сцены.</div>
+<button onclick="copyResult()">Копировать результат</button>
+</div>
+</div>
+<script>
+function createScene() {
+const character = document.getElementById('character').value;
+const scene = document.getElementById('scene').value;
+const movement = document.getElementById('movement').value;
+const style = document.getElementById('style').value;
+const result =
+"Character: " + character + "\n\n" +
+"Scene: " + scene + "\n\n" +
+"Character movement: " + movement + "\n\n" +
+"Visual style: " + style + "\n\n" +
+"Create a smooth animated video. Preserve the character's appearance throughout the entire scene.";
+document.getElementById('result').textContent = result;
+}
+function copyResult() {
+const text = document.getElementById('result').textContent;
+navigator.clipboard.writeText(text)
+.then(() => alert('Результат скопирован!'))
+.catch(() => alert('Не удалось скопировать. Выдели текст вручную.'));
+}
+</script>
+</body>
+</html>
+
+После вставки нажми «Сохранить изменения» (Commit changes).
+
+Это первая рабочая версия интерфейса. Дальше будем добавлять загрузку изображений, настройки анимации и создание видео.
