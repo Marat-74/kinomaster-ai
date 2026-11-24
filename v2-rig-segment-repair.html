@@ -1,0 +1,257 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер — восстановление персонажа</title>
+<style>
+body{margin:0;padding:15px;background:#171b25;color:white;font-family:Arial}
+.panel{background:#222b3b;padding:15px;border-radius:12px;margin:12px 0}
+button{padding:12px;margin:5px 2px;border:0;border-radius:8px;background:#167b65;color:white;font-size:15px}
+button:disabled{opacity:.5}
+canvas{display:block;width:100%;max-width:700px;border:1px solid #718096;border-radius:8px;touch-action:none;background-color:#ddd;background-image:linear-gradient(45deg,#bbb 25%,transparent 25%),linear-gradient(-45deg,#bbb 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#bbb 75%),linear-gradient(-45deg,transparent 75%,#bbb 75%);background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0}
+small{color:#bdc9d8}
+input{max-width:100%}
+</style>
+</head>
+<body>
+<h2>Киномастер-Ай 2.0</h2>
+<h3>Восстановление частей персонажа</h3>
+
+<div class="panel">
+<b>1. Загрузи исходное изображение Петровича</b>
+<p><input type="file" id="file" accept="image/*"></p>
+<p id="status">Изображение ещё не загружено.</p>
+</div>
+
+<div class="panel">
+<b>2. Автоматическое отделение от фона</b>
+<p><small>Модель попробует выделить персонажа. После этого можно будет восстановить случайно удалённые участки.</small></p>
+<button id="cut">Отделить персонажа от фона</button>
+<p id="model">Модель ещё не загружена.</p>
+</div>
+
+<div class="panel">
+<b>3. Восстановление носков сапог и других частей</b>
+<p><small>Нажми «Восстановить кистью» и проведи пальцем по тем местам, которые нужно вернуть. Кисть возвращает исходные пиксели изображения.</small></p>
+<button id="brush">Восстановить кистью: выключена</button>
+<p>Размер кисти: <b id="sizeText">25</b> пикселей</p>
+<input type="range" id="size" min="5" max="100" value="25">
+<button id="undo">Отменить последнее восстановление</button>
+</div>
+
+<div class="panel">
+<b>4. Результат</b>
+<canvas id="out" width="700" height="500"></canvas>
+<p><button id="save">Сохранить прозрачный PNG</button></p>
+<p id="result">Здесь появится результат.</p>
+</div>
+
+<script type="module">
+import {
+ FilesetResolver,
+ ImageSegmenter
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $=id=>document.getElementById(id);
+const canvas=$("out");
+const ctx=canvas.getContext("2d");
+
+let img=null;
+let segmenter=null;
+let original=null;
+let mask=null;
+let brushOn=false;
+let drawing=false;
+let brushSize=25;
+let undoStack=[];
+
+function fitSize(w,h){
+ const s=Math.min(700/w,500/h,1);
+ return {w:Math.round(w*s),h:Math.round(h*s)};
+}
+
+function showOriginal(){
+ if(!img)return;
+ const size=fitSize(img.width,img.height);
+ canvas.width=size.w;
+ canvas.height=size.h;
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.drawImage(img,0,0,size.w,size.h);
+ original=ctx.getImageData(0,0,size.w,size.h);
+ mask=new Uint8Array(size.w*size.h);
+ mask.fill(255);
+ drawResult();
+}
+
+$("file").addEventListener("change",e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+ const reader=new FileReader();
+ reader.onload=()=>{
+  const picture=new Image();
+  picture.onload=()=>{
+   img=picture;
+   showOriginal();
+   undoStack=[];
+   $("status").textContent="Исходное изображение загружено.";
+   $("result").textContent="Теперь можно отделить персонажа от фона.";
+  };
+  picture.src=reader.result;
+ };
+ reader.readAsDataURL(file);
+});
+
+async function loadModel(){
+ if(segmenter)return segmenter;
+ $("model").textContent="Загружаем модель…";
+ const vision=await FilesetResolver.forVisionTasks(
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+ );
+ segmenter=await ImageSegmenter.createFromOptions(vision,{
+  baseOptions:{
+   modelAssetPath:"https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite",
+   delegate:"CPU"
+  },
+  runningMode:"IMAGE",
+  outputCategoryMask:true,
+  outputConfidenceMasks:false
+ });
+ return segmenter;
+}
+
+function drawResult(){
+ if(!original||!mask)return;
+ const output=new ImageData(
+  new Uint8ClampedArray(original.data),
+  original.width,
+  original.height
+ );
+ for(let i=0;i<mask.length;i++){
+  output.data[i*4+3]=Math.round(
+   original.data[i*4+3]*mask[i]/255
+  );
+ }
+ ctx.putImageData(output,0,0);
+}
+
+$("cut").addEventListener("click",async()=>{
+ if(!img){alert("Сначала загрузи исходное изображение.");return;}
+ $("cut").disabled=true;
+ try{
+  const model=await loadModel();
+  $("model").textContent="Анализируем персонажа…";
+  const result=model.segment(img);
+  const category=result.categoryMask;
+  if(!category)throw new Error("Модель не вернула маску.");
+
+  const values=category.getAsUint8Array();
+  const mw=category.width,mh=category.height;
+  const w=canvas.width,h=canvas.height;
+  const nextMask=new Uint8Array(w*h);
+
+  for(let y=0;y<h;y++){
+   for(let x=0;x<w;x++){
+    const mx=Math.min(mw-1,Math.floor(x*mw/w));
+    const my=Math.min(mh-1,Math.floor(y*mh/h));
+    nextMask[y*w+x]=values[my*mw+mx]===0?0:255;
+   }
+  }
+
+  // Немного расширяем маску, чтобы сохранить края одежды и обуви.
+  const expanded=new Uint8Array(nextMask);
+  for(let y=1;y<h-1;y++){
+   for(let x=1;x<w-1;x++){
+    const i=y*w+x;
+    if(nextMask[i]===255)continue;
+    if(
+     nextMask[i-1]===255 ||
+     nextMask[i+1]===255 ||
+     nextMask[i-w]===255 ||
+     nextMask[i+w]===255
+    )expanded[i]=255;
+   }
+  }
+
+  mask=expanded;
+  undoStack=[];
+  drawResult();
+  $("model").textContent="Выделение готово. Если носки или другие части пропали, восстанови их кистью.";
+  $("result").textContent="Проверь контур персонажа. Кисть возвращает исходные участки изображения.";
+  category.close();
+ }catch(err){
+  console.error(err);
+  $("model").textContent="Ошибка: "+(err.message||err)+" Проверь интернет и попробуй снова.";
+ }finally{
+  $("cut").disabled=false;
+ }
+});
+
+$("brush").addEventListener("click",()=>{
+ brushOn=!brushOn;
+ $("brush").textContent="Восстановить кистью: "+(brushOn?"включена":"выключена");
+ $("result").textContent=brushOn?
+  "Проводи пальцем по участкам, которые нужно восстановить.":
+  "Кисть выключена.";
+});
+
+$("size").addEventListener("input",e=>{
+ brushSize=Number(e.target.value);
+ $("sizeText").textContent=brushSize;
+});
+
+function paint(e){
+ if(!brushOn||!mask||!original)return;
+ const r=canvas.getBoundingClientRect();
+ const x=(e.clientX-r.left)*canvas.width/r.width;
+ const y=(e.clientY-r.top)*canvas.height/r.height;
+ const radius=brushSize/2;
+ const before=mask.slice();
+ undoStack.push(before);
+ if(undoStack.length>10)undoStack.shift();
+
+ for(let py=Math.max(0,Math.floor(y-radius));py<Math.min(canvas.height,y+radius);py++){
+  for(let px=Math.max(0,Math.floor(x-radius));px<Math.min(canvas.width,x+radius);px++){
+   if(Math.hypot(px-x,py-y)<=radius){
+    mask[py*canvas.width+px]=255;
+   }
+  }
+ }
+ drawResult();
+}
+
+canvas.addEventListener("pointerdown",e=>{
+ if(!brushOn)return;
+ drawing=true;
+ canvas.setPointerCapture(e.pointerId);
+ paint(e);
+});
+canvas.addEventListener("pointermove",e=>{
+ if(drawing&&brushOn)paint(e);
+});
+function stop(){drawing=false;}
+canvas.addEventListener("pointerup",stop);
+canvas.addEventListener("pointercancel",stop);
+
+$("undo").addEventListener("click",()=>{
+ if(!undoStack.length){
+  $("result").textContent="Пока нечего отменять.";
+  return;
+ }
+ mask=undoStack.pop();
+ drawResult();
+ $("result").textContent="Последнее восстановление отменено.";
+});
+
+$("save").addEventListener("click",()=>{
+ if(!original||!mask){alert("Сначала загрузи изображение.");return;}
+ const link=document.createElement("a");
+ link.download="Petrovich-restored.png";
+ link.href=canvas.toDataURL("image/png");
+ link.click();
+ $("result").textContent="PNG подготовлен для сохранения.";
+});
+</script>
+</body>
+</html>
