@@ -1,0 +1,343 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай 2.0 — Auto-Rig</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:14px;background:#171b25;color:white;font-family:Arial,sans-serif}
+h2{color:#7ee0bd;margin:8px 0}
+.panel{background:#222b3b;padding:14px;border-radius:12px;margin:12px 0}
+button,select{padding:12px;border:0;border-radius:8px;margin:5px 3px;background:#34445c;color:white;font-size:15px}
+button{cursor:pointer}
+button.primary{background:#167b65}
+button:disabled{opacity:.55}
+canvas{display:block;width:100%;max-width:700px;background:#252e40;border:1px solid #52627b;border-radius:10px;touch-action:none}
+input{margin:10px 0;max-width:100%}
+small{color:#aab8ca}
+#result,#status,#imageStatus{line-height:1.45}
+</style>
+</head>
+<body>
+<h2>Киномастер-Ай 2.0</h2>
+<h3>Универсальный Auto-Rig — автоматическое распознавание</h3>
+
+<div class="panel">
+<b>Библиотека персонажей</b>
+<p id="status">Проверяем старую библиотеку…</p>
+<select id="character"><option value="">Выбрать персонажа</option></select>
+<button id="checkLibrary">Проверить библиотеку</button>
+</div>
+
+<div class="panel">
+<b>1. Загрузка изображения</b>
+<p>Выбери изображение персонажа из галереи телефона.</p>
+<input type="file" id="imageFile" accept="image/*">
+<p id="imageStatus">Изображение ещё не загружено.</p>
+</div>
+
+<div class="panel">
+<b>2. Автоматическая расстановка точек</b>
+<p><small>Для первого теста выбери тип «Человек». Модель попробует найти позу на рисунке. Лучше всего распознаются персонажи, изображённые целиком, лицом или немного боком.</small></p>
+<button class="primary" id="autoDetect">Распознать персонажа</button>
+<p id="modelStatus">Модель распознавания ещё не загружена. При первом запуске потребуется интернет.</p>
+</div>
+
+<div class="panel">
+<b>3. Тип скелета</b><br>
+<select id="type">
+<option value="human">Человек</option>
+<option value="bird">Птица — пока ручная настройка</option>
+<option value="animal">Четвероногое — пока ручная настройка</option>
+</select>
+<button id="createRig">Создать шаблон скелета</button>
+</div>
+
+<div class="panel">
+<b>Рабочее поле</b>
+<p><small>После распознавания можно поправить найденные точки пальцем.</small></p>
+<canvas id="canvas" width="700" height="500"></canvas>
+<br>
+<button id="toggleSkeleton">Показать / скрыть скелет</button>
+<button id="resetImage">Убрать изображение</button>
+</div>
+
+<div class="panel">
+<b>4. Сохранение</b><br>
+<button id="saveRig">Сохранить скелет</button>
+<button id="testMove">Проверить суставы</button>
+<p id="result">Старая библиотека персонажей не изменяется. Скелеты сохраняются отдельно.</p>
+</div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const $ = id => document.getElementById(id);
+
+let joints = [];
+let selected = -1;
+let characterImage = null;
+let showSkeleton = true;
+let poseLandmarker = null;
+let modelLoading = false;
+
+const links = [
+  [0,1],[1,2],
+  [1,3],[3,4],[4,5],
+  [1,6],[6,7],[7,8],
+  [0,9],[9,10],
+  [0,11],[11,12]
+];
+
+function createRig() {
+  const type = $("type").value;
+  if (type === "human") {
+    joints = [
+      {n:"Таз",x:350,y:260},
+      {n:"Грудь",x:350,y:180},
+      {n:"Голова",x:350,y:100},
+      {n:"Левое плечо",x:290,y:185},
+      {n:"Левый локоть",x:245,y:260},
+      {n:"Левая кисть",x:220,y:320},
+      {n:"Правое плечо",x:410,y:185},
+      {n:"Правый локоть",x:455,y:260},
+      {n:"Правая кисть",x:480,y:320},
+      {n:"Левое колено",x:315,y:355},
+      {n:"Левая стопа",x:300,y:445},
+      {n:"Правое колено",x:385,y:355},
+      {n:"Правая стопа",x:400,y:445}
+    ];
+  } else if (type === "bird") {
+    joints = [
+      {n:"Корпус",x:350,y:260},{n:"Шея",x:350,y:190},
+      {n:"Голова",x:350,y:120},{n:"Клюв",x:410,y:125},
+      {n:"Левое крыло",x:250,y:220},{n:"Правое крыло",x:450,y:220},
+      {n:"Левая лапа",x:320,y:390},{n:"Правая лапа",x:380,y:390}
+    ];
+  } else {
+    joints = [
+      {n:"Корпус",x:350,y:240},{n:"Голова",x:500,y:170},
+      {n:"Передняя левая",x:280,y:350},{n:"Передняя правая",x:390,y:350},
+      {n:"Задняя левая",x:170,y:350},{n:"Задняя правая",x:230,y:350},
+      {n:"Хвост",x:100,y:210}
+    ];
+  }
+  draw();
+}
+
+function imageRect() {
+  if (!characterImage) return null;
+  const scale = Math.min(canvas.width / characterImage.width, canvas.height / characterImage.height);
+  const w = characterImage.width * scale;
+  const h = characterImage.height * scale;
+  return {x:(canvas.width-w)/2, y:(canvas.height-h)/2, w, h, scale};
+}
+
+function drawImage() {
+  const r = imageRect();
+  if (r) ctx.drawImage(characterImage, r.x, r.y, r.w, r.h);
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawImage();
+  if (!showSkeleton) return;
+
+  ctx.strokeStyle = "#7ee0bd";
+  ctx.lineWidth = 5;
+  links.forEach(([a,b]) => {
+    if (!joints[a] || !joints[b]) return;
+    ctx.beginPath();
+    ctx.moveTo(joints[a].x,joints[a].y);
+    ctx.lineTo(joints[b].x,joints[b].y);
+    ctx.stroke();
+  });
+
+  joints.forEach((j,i) => {
+    ctx.beginPath();
+    ctx.fillStyle = i === selected ? "#ffca67" : "#64cdb1";
+    ctx.arc(j.x,j.y,10,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = "white";
+    ctx.font = "12px Arial";
+    ctx.fillText(j.n,j.x+13,j.y-8);
+  });
+}
+
+$("imageFile").addEventListener("change", e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    alert("Выбери файл изображения.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      characterImage = img;
+      $("imageStatus").textContent = "Изображение загружено: " + file.name;
+      draw();
+    };
+    img.onerror = () => alert("Не удалось открыть изображение.");
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+async function loadPoseModel() {
+  if (poseLandmarker) return poseLandmarker;
+  if (modelLoading) throw new Error("Модель уже загружается. Подожди немного.");
+  modelLoading = true;
+  $("modelStatus").textContent = "Загружаем бесплатную модель распознавания… Это может занять время.";
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "CPU"
+      },
+      runningMode: "IMAGE",
+      numPoses: 1
+    });
+    $("modelStatus").textContent = "Модель загружена. Можно распознавать.";
+    return poseLandmarker;
+  } finally {
+    modelLoading = false;
+  }
+}
+
+function mapLandmark(lm, rect) {
+  return {x:rect.x + lm.x * rect.w, y:rect.y + lm.y * rect.h};
+}
+
+async function autoDetect() {
+  if (!characterImage) {
+    alert("Сначала загрузи изображение персонажа.");
+    return;
+  }
+  if ($("type").value !== "human") {
+    $("modelStatus").textContent = "Автораспознавание этой версии работает пока только для человеческой позы. Для птиц и животных добавим отдельные модели.";
+    return;
+  }
+  const button = $("autoDetect");
+  button.disabled = true;
+  try {
+    const model = await loadPoseModel();
+    $("modelStatus").textContent = "Анализируем изображение…";
+    const result = model.detect(characterImage);
+    if (!result.landmarks || !result.landmarks.length) {
+      $("modelStatus").textContent = "Модель не нашла человеческую позу. Попробуй изображение, где персонаж виден целиком.";
+      return;
+    }
+    const lm = result.landmarks[0];
+    const rect = imageRect();
+    const point = i => mapLandmark(lm[i], rect);
+    const mid = (a,b) => ({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+    const ls=point(11), rs=point(12), le=point(13), re=point(14);
+    const lw=point(15), rw=point(16), lh=point(23), rh=point(24);
+    const lk=point(25), rk=point(26), la=point(27), ra=point(28);
+    const nose=point(0);
+    const chest=mid(ls,rs), pelvis=mid(lh,rh), head={x:nose.x,y:nose.y-18};
+    joints = [
+      {n:"Таз",...pelvis},
+      {n:"Грудь",...chest},
+      {n:"Голова",...head},
+      {n:"Левое плечо",...ls},
+      {n:"Левый локоть",...le},
+      {n:"Левая кисть",...lw},
+      {n:"Правое плечо",...rs},
+      {n:"Правый локоть",...re},
+      {n:"Правая кисть",...rw},
+      {n:"Левое колено",...lk},
+      {n:"Левая стопа",...la},
+      {n:"Правое колено",...rk},
+      {n:"Правая стопа",...ra}
+    ];
+    $("modelStatus").textContent = "Готово: модель нашла позу. Проверь точки — на мультяшных рисунках возможны ошибки.";
+    $("result").textContent = "Точки автоматически расставлены. При необходимости поправь их пальцем и сохрани скелет.";
+    draw();
+  } catch (err) {
+    console.error(err);
+    $("modelStatus").textContent = "Не удалось загрузить модель или выполнить распознавание. Проверь интернет и попробуй ещё раз. Подробность: " + (err.message || err);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function pointer(e) {
+  const r = canvas.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*canvas.width/r.width, y:(e.clientY-r.top)*canvas.height/r.height};
+}
+canvas.addEventListener("pointerdown", e => {
+  const p = pointer(e);
+  selected = joints.findIndex(j => Math.hypot(j.x-p.x,j.y-p.y) < 22);
+  if (selected >= 0) canvas.setPointerCapture(e.pointerId);
+  draw();
+});
+canvas.addEventListener("pointermove", e => {
+  if (selected < 0) return;
+  const p = pointer(e);
+  joints[selected].x = p.x;
+  joints[selected].y = p.y;
+  draw();
+});
+function stopDrag(){ selected=-1; draw(); }
+canvas.addEventListener("pointerup",stopDrag);
+canvas.addEventListener("pointercancel",stopDrag);
+
+$("createRig").addEventListener("click",createRig);
+$("autoDetect").addEventListener("click",autoDetect);
+$("toggleSkeleton").addEventListener("click",() => {showSkeleton=!showSkeleton;draw();});
+$("resetImage").addEventListener("click",() => {
+  characterImage=null;
+  $("imageFile").value="";
+  $("imageStatus").textContent="Изображение убрано с рабочего поля.";
+  draw();
+});
+$("saveRig").addEventListener("click",() => {
+  const id=$("character").value || "default";
+  localStorage.setItem("kinoRig_"+id,JSON.stringify({
+    type:$("type").value,joints:joints
+  }));
+  $("result").textContent="Скелет сохранён отдельно от старой библиотеки персонажей.";
+});
+$("testMove").addEventListener("click",() => {
+  $("result").textContent="Точки доступны для настройки. Это пока редактор скелета, не полноценная анимация частей тела.";
+});
+
+function loadCharacters() {
+  try {
+    const raw=localStorage.getItem("kinoCharacters");
+    const data=JSON.parse(raw || "[]");
+    const select=$("character");
+    select.innerHTML='<option value="">Выбрать персонажа</option>';
+    if (Array.isArray(data)) {
+      data.forEach((item,i) => {
+        const name=typeof item==="string" ? item : (item.name || item.title || "Персонаж "+(i+1));
+        const option=document.createElement("option");
+        option.value=String(i);
+        option.textContent=name;
+        select.appendChild(option);
+      });
+      $("status").textContent="Персонажей найдено: "+data.length;
+    } else {
+      $("status").textContent="Хранилище найдено, но формат библиотеки отличается от ожидаемого списка. Старая библиотека не изменялась.";
+    }
+  } catch(err) {
+    $("status").textContent="Не удалось прочитать библиотеку в этом браузере. Старая библиотека не изменялась.";
+  }
+}
+$("checkLibrary").addEventListener("click",loadCharacters);
+createRig();
+loadCharacters();
+</script>
+</body>
+</html>
