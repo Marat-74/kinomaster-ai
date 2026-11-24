@@ -1,262 +1,129 @@
 
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Киномастер-Ай</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай — мастерская мультфильмов</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;padding:16px;background:#10131b;color:white;font-family:Arial,sans-serif}
-.container{max-width:700px;margin:auto;background:#1c2230;padding:20px;border-radius:16px}
-h1{text-align:center;color:#ffd43b}
-.subtitle{text-align:center;color:#b9c1d0}
-h2{color:#ffd43b;margin-top:28px}
-label{display:block;margin:14px 0 7px;font-weight:bold}
-input,textarea,select{width:100%;padding:12px;border-radius:9px;border:1px solid #46516a;background:#101725;color:white;font-size:16px}
-textarea{min-height:75px}
-button{width:100%;padding:14px;margin-top:14px;border:0;border-radius:9px;background:#ffd43b;color:#171717;font-size:16px;font-weight:bold}
-.secondary{background:#35445e;color:white}
-.danger{background:#713b45;color:white}
-.card{display:flex;gap:12px;align-items:center;background:#101725;border:1px solid #46516a;border-radius:12px;padding:10px;margin-top:10px}
-.card img{width:85px;height:85px;object-fit:cover;border-radius:8px}
-.card-info{flex:1;min-width:0}
-.card-info p{font-size:13px;color:#c3cada;overflow-wrap:anywhere}
-.card input{width:22px;height:22px}
-.result{margin-top:18px;padding:14px;background:#101725;border:1px solid #46516a;border-radius:10px;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}
-.hidden{display:none}
-.hint{font-size:13px;color:#aeb8ca;line-height:1.5}
+:root{--bg:#101827;--panel:#1b2940;--panel2:#243650;--text:#f4f7fb;--muted:#b9c6d8;--accent:#78d7c2;--line:#40536e}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#101827,#18263b);color:var(--text);font:16px/1.45 system-ui,-apple-system,sans-serif}
+main{max-width:900px;margin:auto;padding:18px}h1{font-size:26px;margin:8px 0}h2{font-size:20px;margin:0 0 12px}p{color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0}
+input,textarea,select,button{font:inherit;border-radius:10px;padding:11px;border:1px solid var(--line);background:#101c2d;color:var(--text);width:100%;margin:5px 0}
+textarea{min-height:85px;resize:vertical}button{background:var(--accent);color:#10202a;border:0;font-weight:700;cursor:pointer}button.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}button.danger{background:#9e4953;color:white}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.character{background:var(--panel2);border-radius:12px;padding:12px}.character img{width:100%;height:180px;object-fit:contain;background:#101c2d;border-radius:9px}.small{font-size:13px;color:var(--muted)}label{display:block;margin-top:8px;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.pill{display:inline-block;background:#31455f;padding:4px 9px;border-radius:30px;font-size:12px;color:#d8e7f4}
+.stage{height:260px;background:linear-gradient(#8fc9e8 0%,#d4e9d5 65%,#6f9d69 66%);border-radius:14px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.stage.night{background:linear-gradient(#111c3a 0%,#263b62 65%,#314e3d 66%)}
+.stage img{max-height:78%;max-width:70%;object-fit:contain;position:relative;z-index:2;transform-origin:center bottom}
+.anim-idle{animation:bob 2s ease-in-out infinite}.anim-walk{animation:walk .7s ease-in-out infinite}.anim-run{animation:walk .32s ease-in-out infinite}.anim-turn{animation:turn 1.4s ease-in-out infinite}.anim-talk{animation:talk .35s ease-in-out infinite}.anim-jump{animation:jump .8s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-8px) rotate(2deg)}}@keyframes walk{0%,100%{transform:translateX(-10px) rotate(-4deg)}50%{transform:translateX(10px) rotate(4deg)}}@keyframes turn{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}@keyframes talk{50%{transform:scale(1.02, .98)}}@keyframes jump{0%,100%{transform:translateY(0)}50%{transform:translateY(-45px)}}
+.wind:after{content:"〰 〰 〰";position:absolute;top:20%;left:-30%;font-size:34px;color:#fff9;animation:drift 4s linear infinite}.leaves:before{content:"🍃  🍂  🍃";position:absolute;top:20%;left:-40%;font-size:30px;animation:drift 5s linear infinite}.rain:before{content:"🌧️";position:absolute;top:8px;right:18px;font-size:28px}.snow:before{content:"❄️  ❅  ❄️";position:absolute;top:12px;left:10%;font-size:25px;animation:fall 4s linear infinite}.water:after{content:"〰〰〰〰〰";position:absolute;bottom:4px;left:-20%;font-size:35px;color:#dff8ff;animation:drift 3s linear infinite}.fog:after{content:"";position:absolute;inset:45% -20% 0;background:linear-gradient(90deg,transparent,#fff8,transparent);animation:drift 7s linear infinite}
+@keyframes drift{to{transform:translateX(160%)}}@keyframes fall{to{transform:translateY(220px)}}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;flex:1;min-width:120px}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 </style>
 </head>
 <body>
-<div class="container">
+<main>
 <h1>🎬 Киномастер-Ай</h1>
-<p class="subtitle">Мастерская создания AI-видео</p>
-
-<h2>🎭 Библиотека персонажей</h2>
-<p class="hint">Добавляй героев мультфильма. Выбирай их для каждой новой сцены.</p>
-
-<label>Имя персонажа</label>
-<input id="newName" placeholder="Например: Кузьма">
-
-<label>Описание внешности</label>
-<textarea id="newAppearance" placeholder="Как выглядит персонаж? Цвет, одежда, особенности..."></textarea>
-
-<label>Характер персонажа</label>
-<textarea id="newPersonality" placeholder="Какой у него характер и привычки?"></textarea>
-
-<label>Фотография или эскиз персонажа</label>
-<input id="newImage" type="file" accept="image/*">
-<p class="hint">Лучше загружать утверждённый эскиз. Изображение будет уменьшено для хранения.</p>
-
-<button onclick="addCharacter()">➕ Добавить персонажа</button>
-
-<div id="library"></div>
-
-<h2>🎬 Создание новой сцены</h2>
-
-<label>Язык промпта</label>
-<select id="language">
-<option value="ru">Русский</option>
-<option value="en">English</option>
-</select>
-
-<p class="hint">Отметь одного или нескольких персонажей выше.</p>
-
-<label>Описание сцены</label>
-<textarea id="scene" placeholder="Что происходит в этой сцене?"></textarea>
-
-<label>Движения и действия</label>
-<textarea id="movement" placeholder="Что делают персонажи?"></textarea>
-
-<label>Визуальный стиль</label>
-<select id="style">
-<option value="Кинематографичный мультфильм">Кинематографичный мультфильм</option>
-<option value="Реалистичное кино">Реалистичное кино</option>
-<option value="3D-анимация">3D-анимация</option>
-<option value="Сказочная анимация">Сказочная анимация</option>
-</select>
-
-<button onclick="createPrompt()">Создать описание сцены</button>
-
-<div id="resultBlock" class="hidden">
-<h2>Готовый промпт</h2>
-<div id="result" class="result"></div>
-<button class="secondary" onclick="copyPrompt()">📋 Копировать промпт</button>
+<p>Твоя мастерская мультфильмов, персонажей и простых анимационных сцен.</p>
+<div class="panel">
+<h2>1. Библиотека персонажей</h2>
+<p class="small">Персонажи сохраняются в этом браузере на этом устройстве. Новая версия читает прежнюю библиотеку сайта, если открыта на том же адресе GitHub Pages.</p>
+<div class="grid">
+<div><label>Имя персонажа</label><input id="name" placeholder="Например, Петрович"><label>Внешность</label><textarea id="appearance" placeholder="Опиши внешность героя"></textarea><label>Характер</label><textarea id="personality" placeholder="Опиши характер героя"></textarea><label>Изображение персонажа</label><input id="photo" type="file" accept="image/*"><button id="add">Добавить персонажа</button></div>
+<div><label>Выбери персонажей для сцены</label><div id="library" class="small">Пока библиотека пуста.</div></div>
 </div>
 </div>
-
+<div class="panel">
+<h2>2. Движения персонажа</h2>
+<div class="grid">
+<div><label>Персонаж для предпросмотра</label><select id="previewCharacter"></select><label>Движение</label><select id="movement"><option value="idle">Стоять / слегка двигаться</option><option value="walk">Идти (условная анимация)</option><option value="run">Бежать (условная анимация)</option><option value="turn">Поворачиваться</option><option value="talk">Говорить</option><option value="jump">Прыгать</option></select></div>
+<div><label>Предпросмотр</label><div id="stage" class="stage"><span class="small">Добавь или выбери персонажа</span></div><p class="small">Это простое движение всей картинки целиком. Для настоящей ходьбы с отдельными лапами и руками понадобятся слои или покадровая анимация.</p></div>
+</div>
+</div>
+<div class="panel">
+<h2>3. Природа и окружение</h2>
+<label>Эффект сцены</label><select id="effect"><option value="">Без эффекта</option><option value="wind">Ветер</option><option value="leaves">Листья и ветки колышутся</option><option value="rain">Дождь</option><option value="snow">Снег</option><option value="water">Текущая вода / волны</option><option value="fog">Туман</option><option value="night">Ночная сцена</option></select>
+<p class="small">Эффекты показаны в предпросмотре и могут быть описаны в промпте.</p>
+</div>
+<div class="panel">
+<h2>4. Голос персонажа</h2>
+<label>Персонаж</label><select id="voiceCharacter"></select><label>Доступный голос устройства</label><select id="voice"></select>
+<div class="grid"><div><label>Скорость речи</label><input id="rate" type="range" min="0.65" max="1.35" step="0.05" value="0.9"></div><div><label>Высота голоса</label><input id="pitch" type="range" min="0.6" max="1.5" step="0.05" value="0.9"></div></div>
+<label>Текст для озвучки</label><textarea id="speechText" placeholder="Напиши реплику персонажа..."></textarea>
+<div class="actions"><button id="saveVoice">Сохранить голос персонажа</button><button id="speak" class="secondary">▶ Прослушать</button><button id="stop" class="secondary">Остановить</button></div>
+<p class="small">Голоса предоставляются самим устройством и браузером. На iPhone выбор русских голосов может быть ограничен. Точная синхронизация губ с речью пока не реализована.</p>
+</div>
+<div class="panel">
+<h2>5. Сборка сцены и промпта</h2>
+<label>Что происходит в сцене?</label><textarea id="scene" placeholder="Например: Петрович сидит на лавочке, а Кузьма осторожно подкрадывается к пирожку."></textarea>
+<label>Дополнительные движения</label><textarea id="moves" placeholder="Кузьма оглядывается, Петрович поворачивает голову..."></textarea>
+<label>Диалог персонажей</label><textarea id="dialogue" placeholder="Петрович: Эй, не тронь пирожок!
+Кузьма: Я только посмотреть!"></textarea>
+<label>Стиль</label><select id="style"><option>Добрый семейный 3D-мультфильм</option><option>Яркая 2D-мультяшная анимация</option><option>Кукольная пластилиновая анимация</option><option>Сказочная рисованная анимация</option></select>
+<div class="actions"><button id="generate">Собрать промпт</button><button id="copy" class="secondary">Копировать</button></div>
+<textarea id="output" placeholder="Здесь появится готовый промпт..." style="min-height:180px"></textarea>
+</div>
+<div class="panel">
+<h2>Что уже умеет этот прототип</h2>
+<ul class="small"><li>Хранить персонажей в локальной библиотеке браузера.</li><li>Показывать простые движения целой картинки.</li><li>Добавлять визуальные эффекты окружения.</li><li>Подбирать и сохранять голос для каждого персонажа, если браузер поддерживает SpeechSynthesis.</li><li>Собирать текстовый промпт для дальнейшего создания сцены.</li></ul>
+<p class="small">Пока нет полноценной покадровой анимации, автоматического lip-sync и экспорта готового MP4. Это следующие этапы разработки.</p>
+</div>
+</main>
 <script>
-let characters=[];
-let selectedIds=[];
-
-try{
-characters=JSON.parse(localStorage.getItem("kinoCharacters")||"[]");
-}catch(e){characters=[];}
-
-function saveLibrary(){
-try{
-localStorage.setItem("kinoCharacters",JSON.stringify(characters));
-return true;
-}catch(e){
-alert("Не удалось сохранить. Возможно, память браузера заполнена. Попробуй загрузить изображение меньшего размера.");
-return false;
+const $=id=>document.getElementById(id);
+const KEY='kinoCharacters';
+let chars=[];
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function load(){try{chars=JSON.parse(localStorage.getItem(KEY)||'[]');if(!Array.isArray(chars))chars=[];}catch(e){chars=[];}render();}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(chars));}catch(e){alert('Не удалось сохранить: возможно, переполнено хранилище браузера.');}}
+function render(){
+ $('library').innerHTML=chars.length?'<div class="grid">'+chars.map(c=>`<div class="character"><img src="${c.image||''}" alt=""><b>${esc(c.name)}</b><p class="small">${esc(c.appearance||'')}</p><label><input type="checkbox" class="chosen" value="${esc(c.id)}" style="width:auto"> Включить в сцену</label><button class="danger" data-del="${esc(c.id)}">Удалить</button></div>`).join('')+'</div>':'Пока библиотека пуста.';
+ document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{chars=chars.filter(c=>String(c.id)!==b.dataset.del);save();render();});
+ ['previewCharacter','voiceCharacter'].forEach(id=>{let sel=$(id),old=sel.value;sel.innerHTML=chars.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');if(chars.some(c=>String(c.id)===old))sel.value=old;});
+ preview();loadVoiceSettings();
 }
-}
-
-function renderLibrary(){
-const library=document.getElementById("library");
-if(!characters.length){
-library.innerHTML='<p class="hint">Пока библиотека пуста. Добавь первого персонажа!</p>';
-return;
-}
-library.innerHTML=characters.map(c=>`
-<div class="card">
-<img src="${c.image}" alt="">
-<div class="card-info">
-<strong>${escapeHTML(c.name)}</strong>
-<p>${escapeHTML(c.appearance)}</p>
-</div>
-<input type="checkbox" value="${c.id}" aria-label="Выбрать персонажа"
-${selectedIds.includes(c.id)?"checked":""}
-onchange="toggleCharacter('${c.id}',this.checked)">
-</div>
-<button class="danger" onclick="deleteCharacter('${c.id}')">Удалить ${escapeHTML(c.name)}</button>
-`).join("");
-}
-
-function escapeHTML(value){
-return String(value||"").replace(/[&<>"']/g,ch=>({
-"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-}[ch]));
-}
-
-function toggleCharacter(id,checked){
-if(checked&&!selectedIds.includes(id))selectedIds.push(id);
-if(!checked)selectedIds=selectedIds.filter(x=>x!==id);
-}
-
-function addCharacter(){
-const name=document.getElementById("newName").value.trim();
-const appearance=document.getElementById("newAppearance").value.trim();
-const personality=document.getElementById("newPersonality").value.trim();
-const file=document.getElementById("newImage").files[0];
-
-if(!name||!appearance||!file){
-alert("Укажи имя, внешность и загрузи изображение персонажа.");
-return;
-}
-if(!file.type.startsWith("image/")){
-alert("Выбери файл изображения.");
-return;
-}
-
-const reader=new FileReader();
-reader.onload=function(){
-const img=new Image();
-img.onload=function(){
-const canvas=document.createElement("canvas");
-const max=600;
-const scale=Math.min(1,max/Math.max(img.width,img.height));
-canvas.width=Math.round(img.width*scale);
-canvas.height=Math.round(img.height*scale);
-canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
-const compressed=canvas.toDataURL("image/jpeg",0.72);
-
-const character={
-id:Date.now().toString(),
-name,appearance,personality,image:compressed
+$('add').onclick=()=>{
+ const name=$('name').value.trim(),file=$('photo').files[0];
+ if(!name||!file){alert('Укажи имя и выбери фотографию персонажа.');return;}
+ const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas'),scale=Math.min(1,600/Math.max(img.width,img.height));canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);chars.push({id:String(Date.now()),name,appearance:$('appearance').value,personality:$('personality').value,image:canvas.toDataURL('image/jpeg',.82)});save();$('name').value='';$('appearance').value='';$('personality').value='';$('photo').value='';render();};img.src=reader.result;};reader.readAsDataURL(file);
 };
-characters.push(character);
-if(saveLibrary()){
-document.getElementById("newName").value="";
-document.getElementById("newAppearance").value="";
-document.getElementById("newPersonality").value="";
-document.getElementById("newImage").value="";
-renderLibrary();
-alert("Персонаж добавлен в библиотеку!");
-}else{
-characters.pop();
+function preview(){
+ const c=chars.find(x=>String(x.id)===$('previewCharacter').value),stage=$('stage');
+ stage.className='stage';if($('effect').value)stage.classList.add($('effect').value);
+ if($('effect').value==='night')stage.classList.add('night');
+ if(!c){stage.innerHTML='<span class="small">Добавь или выбери персонажа</span>';return;}
+ stage.innerHTML=`<img class="anim-${$('movement').value}" src="${c.image}" alt="${esc(c.name)}">`;
 }
+['previewCharacter','movement','effect'].forEach(id=>$(id).addEventListener('change',preview));
+let voices=[];
+function populateVoices(){if(!('speechSynthesis'in window))return;voices=speechSynthesis.getVoices();const sel=$('voice');const prev=sel.value;sel.innerHTML=voices.map((v,i)=>`<option value="${i}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');if(prev)sel.value=prev;loadVoiceSettings();}
+if('speechSynthesis'in window){populateVoices();speechSynthesis.onvoiceschanged=populateVoices;}
+function selectedChar(){return chars.find(c=>String(c.id)===$('voiceCharacter').value);}
+function loadVoiceSettings(){const c=selectedChar();if(!c)return;if(c.voiceRate)$('rate').value=c.voiceRate;if(c.voicePitch)$('pitch').value=c.voicePitch;if(c.voiceURI){const i=voices.findIndex(v=>v.voiceURI===c.voiceURI);if(i>=0)$('voice').value=String(i);}}
+$('voiceCharacter').addEventListener('change',loadVoiceSettings);
+$('saveVoice').onclick=()=>{const c=selectedChar();if(!c){alert('Сначала добавь персонажа.');return;}const v=voices[Number($('voice').value)];c.voiceURI=v?.voiceURI||'';c.voiceName=v?.name||'';c.voiceRate=Number($('rate').value);c.voicePitch=Number($('pitch').value);save();alert('Настройки голоса сохранены для '+c.name+'.');};
+$('speak').onclick=()=>{if(!('speechSynthesis'in window)){alert('Этот браузер не поддерживает озвучку.');return;}const c=selectedChar(),u=new SpeechSynthesisUtterance($('speechText').value||'Привет! Это мой голос.');u.lang='ru-RU';u.rate=Number($('rate').value);u.pitch=Number($('pitch').value);const v=voices[Number($('voice').value)];if(v)u.voice=v;if(c?.voiceURI){const saved=voices.find(x=>x.voiceURI===c.voiceURI);if(saved)u.voice=saved;}speechSynthesis.cancel();speechSynthesis.speak(u);};
+$('stop').onclick=()=>{if('speechSynthesis'in window)speechSynthesis.cancel();};
+$('generate').onclick=()=>{
+ const selected=[...document.querySelectorAll('.chosen:checked')].map(x=>chars.find(c=>String(c.id)===x.value)).filter(Boolean);
+ const names=selected.map(c=>`${c.name}: ${c.appearance||''} Характер: ${c.personality||''}`).join('\n');
+ const effect=$('effect').selectedOptions[0].text;
+ $('output').value=`Создай сцену в стиле: ${$('style').value}.
+Персонажи:
+${names||'Используй персонажей, описанных в сцене.'}
+Сюжет: ${$('scene').value}
+Движения: ${$('moves').value}
+Диалог:
+${$('dialogue').value}
+Эффект окружения: ${effect}.
+Сохраняй постоянную внешность, одежду, пропорции и индивидуальность каждого персонажа во всех кадрах. Выразительная естественная мимика, понятные действия, гармоничная композиция.`;
 };
-img.onerror=()=>alert("Не удалось открыть изображение.");
-img.src=reader.result;
-};
-reader.onerror=()=>alert("Не удалось прочитать файл.");
-reader.readAsDataURL(file);
-}
-
-function deleteCharacter(id){
-if(!confirm("Удалить этого персонажа из библиотеки?"))return;
-characters=characters.filter(c=>c.id!==id);
-selectedIds=selectedIds.filter(x=>x!==id);
-saveLibrary();
-renderLibrary();
-}
-
-function createPrompt(){
-const lang=document.getElementById("language").value;
-const scene=document.getElementById("scene").value.trim();
-const movement=document.getElementById("movement").value.trim();
-const style=document.getElementById("style").value;
-const chosen=characters.filter(c=>selectedIds.includes(c.id));
-
-if(!chosen.length||!scene||!movement){
-alert("Выбери персонажей и заполни описание сцены и движения.");
-return;
-}
-
-const descriptions=chosen.map(c=>
-`Имя: ${c.name}\nВнешность: ${c.appearance}\nХарактер: ${c.personality||"Не указан"}`
-).join("\n\n");
-
-let prompt;
-if(lang==="ru"){
-prompt=`Персонажи:\n${descriptions}
-
-Сцена: ${scene}
-
-Движения персонажей: ${movement}
-
-Визуальный стиль: ${style}
-
-Используй загруженные изображения персонажей как основные образцы внешности. Точно сохраняй их внешний вид, пропорции, цвета и отличительные особенности. Не меняй одежду и детали внешности между кадрами. Создай плавное анимированное видео с естественными движениями и последовательным развитием сцены.`;
-}else{
-prompt=`Characters:\n${chosen.map(c=>
-`Name: ${c.name}\nAppearance: ${c.appearance}\nPersonality: ${c.personality||"Not specified"}`
-).join("\n\n")}
-
-Scene: ${scene}
-
-Character movements: ${movement}
-
-Visual style: ${style}
-
-Use the uploaded character images as the primary visual references. Preserve their exact appearance, proportions, colors and distinctive features. Do not change clothing or visual details between frames. Create a smooth animated video with natural movements and consistent scene continuity.`;
-}
-
-document.getElementById("result").textContent=prompt;
-document.getElementById("resultBlock").classList.remove("hidden");
-}
-
-async function copyPrompt(){
-const text=document.getElementById("result").textContent;
-try{
-await navigator.clipboard.writeText(text);
-alert("Промпт скопирован!");
-}catch(e){
-const area=document.createElement("textarea");
-area.value=text;
-document.body.appendChild(area);
-area.select();
-document.execCommand("copy");
-area.remove();
-alert("Промпт скопирован!");
-}
-}
-
-renderLibrary();
+$('copy').onclick=async()=>{if(!$('output').value){alert('Сначала собери промпт.');return;}try{await navigator.clipboard.writeText($('output').value);alert('Промпт скопирован.');}catch(e){$('output').select();document.execCommand('copy');alert('Попробовал скопировать промпт.');}};
+load();
 </script>
 </body>
 </html>
