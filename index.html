@@ -1,4 +1,3 @@
-Скопируй весь код ниже и вставь в файл index.html.
 
 <!DOCTYPE html>
 <html lang="ru">
@@ -11,99 +10,172 @@
 body {
   margin: 0;
   padding: 20px;
-  background: #10131c;
-  color: white;
+  background: #10131b;
+  color: #fff;
   font-family: Arial, sans-serif;
 }
 .container {
-  max-width: 700px;
+  max-width: 650px;
   margin: auto;
+  background: #1c2230;
+  padding: 22px;
+  border-radius: 16px;
 }
-h1 { color: #7c9cff; }
-.card {
-  background: #1d2332;
-  padding: 18px;
-  border-radius: 14px;
-  margin-top: 18px;
-}
+h1 { text-align: center; color: #ffd43b; }
+.subtitle { text-align: center; color: #b9c1d0; }
 label {
   display: block;
-  margin: 15px 0 8px;
+  margin: 18px 0 8px;
+  font-weight: bold;
 }
-textarea, input {
+input, textarea, select {
   width: 100%;
   padding: 13px;
-  border: 1px solid #46516a;
   border-radius: 9px;
+  border: 1px solid #46516a;
   background: #101725;
   color: white;
   font-size: 16px;
 }
-textarea { min-height: 120px; resize: vertical; }
+textarea { min-height: 95px; resize: vertical; }
 button {
   width: 100%;
   padding: 15px;
   margin-top: 18px;
   border: 0;
-  border-radius: 10px;
-  background: #547cff;
-  color: white;
-  font-size: 17px;
+  border-radius: 9px;
+  background: #ffd43b;
+  color: #171717;
+  font-size: 16px;
   font-weight: bold;
+  cursor: pointer;
 }
-#result {
+button.secondary {
+  background: #35445e;
+  color: white;
+}
+.result {
+  margin-top: 22px;
+  padding: 15px;
+  background: #101725;
+  border: 1px solid #46516a;
+  border-radius: 10px;
   white-space: pre-wrap;
-  line-height: 1.6;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
+.hidden { display: none; }
 </style>
 </head>
 <body>
 <div class="container">
+
 <h1>🎬 Киномастер-Ай</h1>
-<p>Создавай идеи для оживления персонажей и будущих видеосцен.</p>
-<div class="card">
-<h2>Новая сцена</h2>
-<label>Название персонажа</label>
+<p class="subtitle">Мастерская создания AI-видео</p>
+
+<label for="language">Язык промпта</label>
+<select id="language">
+  <option value="ru">Русский</option>
+  <option value="en">English</option>
+</select>
+
+<label for="character">Имя персонажа</label>
 <input id="character" placeholder="Например: Кузьма">
-<label>Описание сцены</label>
-<textarea id="scene" placeholder="Опиши, что происходит в кадре..."></textarea>
-<label>Движения персонажа</label>
-<textarea id="movement" placeholder="Например: персонаж поворачивает голову, моргает и машет лапой..."></textarea>
-<label>Стиль видео</label>
-<input id="style" value="Кинематографичный мультфильм">
-<button onclick="createScene()">Создать описание сцены</button>
+
+<label for="scene">Описание сцены</label>
+<textarea id="scene" placeholder="Что происходит в сцене?"></textarea>
+
+<label for="movement">Движения персонажа</label>
+<textarea id="movement" placeholder="Опишите движения и действия персонажа"></textarea>
+
+<label for="style">Визуальный стиль</label>
+<select id="style">
+  <option value="Кинематографичный мультфильм">Кинематографичный мультфильм</option>
+  <option value="Реалистичное кино">Реалистичное кино</option>
+  <option value="3D-анимация">3D-анимация</option>
+  <option value="Аниме">Аниме</option>
+  <option value="Сказочная анимация">Сказочная анимация</option>
+</select>
+
+<button onclick="createPrompt()">Создать описание сцены</button>
+
+<div id="resultBlock" class="hidden">
+  <h3>Готовый промпт</h3>
+  <div id="result" class="result"></div>
+  <button class="secondary" onclick="copyPrompt()">📋 Копировать промпт</button>
 </div>
-<div class="card">
-<h2>Результат</h2>
-<div id="result">Здесь появится описание твоей сцены.</div>
-<button onclick="copyResult()">Копировать результат</button>
+
 </div>
-</div>
+
 <script>
-function createScene() {
-const character = document.getElementById('character').value;
-const scene = document.getElementById('scene').value;
-const movement = document.getElementById('movement').value;
-const style = document.getElementById('style').value;
-const result =
-"Character: " + character + "\n\n" +
-"Scene: " + scene + "\n\n" +
-"Character movement: " + movement + "\n\n" +
-"Visual style: " + style + "\n\n" +
-"Create a smooth animated video. Preserve the character's appearance throughout the entire scene.";
-document.getElementById('result').textContent = result;
+function createPrompt() {
+  const lang = document.getElementById("language").value;
+  const character = document.getElementById("character").value.trim();
+  const scene = document.getElementById("scene").value.trim();
+  const movement = document.getElementById("movement").value.trim();
+  const style = document.getElementById("style").value;
+
+  if (!character || !scene || !movement) {
+    alert(lang === "ru"
+      ? "Заполните имя персонажа, сцену и движения."
+      : "Please fill in the character, scene and movement.");
+    return;
+  }
+
+  let prompt = "";
+
+  if (lang === "ru") {
+    prompt =
+`Персонаж: ${character}
+
+Сцена: ${scene}
+
+Движения персонажа: ${movement}
+
+Визуальный стиль: ${style}
+
+Создай плавное анимированное видео. Сохраняй неизменную внешность персонажа на протяжении всей сцены. Сохраняй последовательность движений, пропорции и детали внешности. Используй естественную анимацию и плавные переходы.`;
+  } else {
+    const styles = {
+      "Кинематографичный мультфильм": "Cinematic cartoon",
+      "Реалистичное кино": "Photorealistic cinematic film",
+      "3D-анимация": "3D animation",
+      "Аниме": "Anime style",
+      "Сказочная анимация": "Fairytale animation"
+    };
+
+    prompt =
+`Character: ${character}
+
+Scene: ${scene}
+
+Character movement: ${movement}
+
+Visual style: ${styles[style] || style}
+
+Create a smooth animated video. Preserve the character's exact appearance throughout the entire scene. Maintain consistent proportions and visual details. Use natural animation and smooth transitions.`;
+  }
+
+  document.getElementById("result").textContent = prompt;
+  document.getElementById("resultBlock").classList.remove("hidden");
 }
-function copyResult() {
-const text = document.getElementById('result').textContent;
-navigator.clipboard.writeText(text)
-.then(() => alert('Результат скопирован!'))
-.catch(() => alert('Не удалось скопировать. Выдели текст вручную.'));
+
+async function copyPrompt() {
+  const text = document.getElementById("result").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("Промпт скопирован!");
+  } catch (e) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+    alert("Промпт скопирован!");
+  }
 }
 </script>
 </body>
 </html>
 
-После вставки нажми «Сохранить изменения» (Commit changes).
-
-Это первая рабочая версия интерфейса. Дальше будем добавлять загрузку изображений, настройки анимации и создание видео.
