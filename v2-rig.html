@@ -3,32 +3,42 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Киномастер-Ай 2.0 — Auto-Rig</title>
 <style>
-body{margin:0;background:#171b25;color:#fff;font-family:Arial;padding:16px}
+body{margin:0;padding:16px;background:#171b25;color:white;font-family:Arial}
 h2{color:#7ee0bd}
-button,select{padding:12px;border:0;border-radius:8px;margin:5px;background:#34445c;color:white}
-canvas{width:100%;max-width:700px;background:#252e40;border:1px solid #52627b;border-radius:10px;touch-action:none}
 .panel{background:#222b3b;padding:14px;border-radius:12px;margin:12px 0}
+button,select{padding:12px;border:0;border-radius:8px;margin:5px;background:#34445c;color:white}
+button{cursor:pointer}
+canvas{width:100%;max-width:700px;background:#252e40;border:1px solid #52627b;border-radius:10px;touch-action:none}
+input{margin:10px 0;max-width:100%}
 small{color:#aab8ca}
 </style>
 </head>
 <body>
+
 <h2>Киномастер-Ай 2.0</h2>
 <h3>Универсальный Auto-Rig</h3>
 
 <div class="panel">
-<label>Персонаж:</label>
+<b>Библиотека персонажей</b>
+<p id="status">Проверяем старую библиотеку...</p>
 <select id="character">
-<option value="">Выбрать из библиотеки</option>
+<option value="">Выбрать персонажа</option>
 </select>
-<button onclick="loadCharacters()">Обновить библиотеку</button>
-<p id="status">Проверка библиотеки…</p>
+<button onclick="loadCharacters()">Проверить библиотеку</button>
 </div>
 
 <div class="panel">
-<label>Тип скелета:</label>
+<b>Загрузка изображения</b>
+<p>Выбери Петровича из галереи телефона.</p>
+<input type="file" id="imageFile" accept="image/*">
+<p id="imageStatus">Изображение ещё не загружено.</p>
+</div>
+
+<div class="panel">
+<b>Тип скелета</b><br>
 <select id="type" onchange="createRig()">
 <option value="human">Человек</option>
 <option value="bird">Птица</option>
@@ -38,24 +48,39 @@ small{color:#aab8ca}
 </div>
 
 <div class="panel">
+<b>Рабочее поле</b>
+<p><small>Загрузи картинку, затем передвигай суставы пальцем.</small></p>
 <canvas id="canvas" width="700" height="500"></canvas>
-<p><small>Перетаскивай суставы пальцем или мышью.</small></p>
+<br>
+<button onclick="toggleSkeleton()">Показать / скрыть скелет</button>
+<button onclick="resetImage()">Убрать изображение</button>
 </div>
 
 <div class="panel">
+<b>Сохранение</b><br>
 <button onclick="saveRig()">Сохранить скелет</button>
-<button onclick="testMove()">Проверить движение</button>
+<button onclick="testMove()">Проверить суставы</button>
 <p id="result"></p>
 </div>
 
 <script>
 const canvas=document.getElementById('canvas');
 const ctx=canvas.getContext('2d');
+
 let joints=[];
 let selected=-1;
+let characterImage=null;
+let showSkeleton=true;
+
+const links=[
+[0,1],[1,2],[1,3],[3,4],[4,5],
+[1,6],[6,7],[7,8],[0,9],[9,10],
+[0,11],[11,12]
+];
 
 function createRig(){
  const type=document.getElementById('type').value;
+
  if(type==='human'){
  joints=[
  {n:'Таз',x:350,y:260},
@@ -73,17 +98,20 @@ function createRig(){
  {n:'Правая стопа',x:400,y:445}
  ];
  }
+
  if(type==='bird'){
  joints=[
  {n:'Корпус',x:350,y:260},
- {n:'Голова',x:350,y:140},
- {n:'Клюв',x:420,y:145},
+ {n:'Шея',x:350,y:190},
+ {n:'Голова',x:350,y:120},
+ {n:'Клюв',x:410,y:125},
  {n:'Левое крыло',x:250,y:220},
  {n:'Правое крыло',x:450,y:220},
  {n:'Лапа левая',x:320,y:390},
  {n:'Лапа правая',x:380,y:390}
  ];
  }
+
  if(type==='animal'){
  joints=[
  {n:'Корпус',x:350,y:240},
@@ -95,42 +123,106 @@ function createRig(){
  {n:'Хвост',x:100,y:210}
  ];
  }
+
  draw();
 }
 
+function drawImage(){
+ if(!characterImage)return;
+
+ const scale=Math.min(
+  canvas.width/characterImage.width,
+  canvas.height/characterImage.height
+ );
+
+ const w=characterImage.width*scale;
+ const h=characterImage.height*scale;
+
+ ctx.drawImage(
+  characterImage,
+  (canvas.width-w)/2,
+  (canvas.height-h)/2,
+  w,h
+ );
+}
+
 function draw(){
- ctx.clearRect(0,0,700,500);
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ drawImage();
+
+ if(!showSkeleton)return;
+
  ctx.strokeStyle='#7ee0bd';
  ctx.lineWidth=5;
- const links=[[0,1],[1,2],[1,3],[3,4],[4,5],[1,6],[6,7],[7,8],[0,9],[9,10],[0,11],[11,12]];
- joints.forEach((j,i)=>{
-  const parent=links.find(l=>l[1]===i);
-  if(parent){
-   const p=joints[parent[0]];
-   ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(j.x,j.y);ctx.stroke();
-  }
+
+ links.forEach(([a,b])=>{
+  if(!joints[a]||!joints[b])return;
+  ctx.beginPath();
+  ctx.moveTo(joints[a].x,joints[a].y);
+  ctx.lineTo(joints[b].x,joints[b].y);
+  ctx.stroke();
  });
+
  joints.forEach((j,i)=>{
   ctx.beginPath();
   ctx.fillStyle=i===selected?'#ffca67':'#64cdb1';
   ctx.arc(j.x,j.y,11,0,Math.PI*2);
   ctx.fill();
+
   ctx.fillStyle='white';
   ctx.font='12px Arial';
   ctx.fillText(j.n,j.x+13,j.y-8);
  });
 }
 
+document.getElementById('imageFile').addEventListener('change',e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+
+ if(!file.type.startsWith('image/')){
+  alert('Выбери файл изображения.');
+  return;
+ }
+
+ const reader=new FileReader();
+
+ reader.onload=()=>{
+  const img=new Image();
+
+  img.onload=()=>{
+   characterImage=img;
+   document.getElementById('imageStatus').textContent=
+    'Изображение загружено: '+file.name;
+   draw();
+  };
+
+  img.onerror=()=>{
+   alert('Не удалось открыть изображение.');
+  };
+
+  img.src=reader.result;
+ };
+
+ reader.readAsDataURL(file);
+});
+
 function pointer(e){
  const r=canvas.getBoundingClientRect();
- return {x:(e.clientX-r.left)*700/r.width,y:(e.clientY-r.top)*500/r.height};
+ return {
+  x:(e.clientX-r.left)*canvas.width/r.width,
+  y:(e.clientY-r.top)*canvas.height/r.height
+ };
 }
+
 canvas.addEventListener('pointerdown',e=>{
  const p=pointer(e);
- selected=joints.findIndex(j=>Math.hypot(j.x-p.x,j.y-p.y)<22);
+ selected=joints.findIndex(j=>
+  Math.hypot(j.x-p.x,j.y-p.y)<22
+ );
  canvas.setPointerCapture(e.pointerId);
  draw();
 });
+
 canvas.addEventListener('pointermove',e=>{
  if(selected<0)return;
  const p=pointer(e);
@@ -138,38 +230,78 @@ canvas.addEventListener('pointermove',e=>{
  joints[selected].y=p.y;
  draw();
 });
-canvas.addEventListener('pointerup',()=>selected=-1);
-canvas.addEventListener('pointercancel',()=>selected=-1);
+
+canvas.addEventListener('pointerup',()=>{
+ selected=-1;
+ draw();
+});
+
+canvas.addEventListener('pointercancel',()=>{
+ selected=-1;
+ draw();
+});
+
+function toggleSkeleton(){
+ showSkeleton=!showSkeleton;
+ draw();
+}
+
+function resetImage(){
+ characterImage=null;
+ document.getElementById('imageFile').value='';
+ document.getElementById('imageStatus').textContent=
+  'Изображение удалено с рабочего поля.';
+ draw();
+}
 
 function saveRig(){
  const id=document.getElementById('character').value||'default';
- localStorage.setItem('kinoRig_'+id,JSON.stringify(joints));
- document.getElementById('result').textContent='Скелет сохранён отдельно от старой библиотеки.';
+
+ localStorage.setItem(
+  'kinoRig_'+id,
+  JSON.stringify({
+   type:document.getElementById('type').value,
+   joints:joints
+  })
+ );
+
+ document.getElementById('result').textContent=
+  'Скелет сохранён отдельно от старой библиотеки.';
 }
 
 function testMove(){
  document.getElementById('result').textContent=
- 'Суставы готовы к настройке. Полная анимация будет подключена следующим этапом.';
+  'Проверка завершена. Суставы доступны для настройки.';
 }
 
 function loadCharacters(){
  try{
-  const data=JSON.parse(localStorage.getItem('kinoCharacters')||'[]');
+  const data=JSON.parse(
+   localStorage.getItem('kinoCharacters')||'[]'
+  );
+
   const select=document.getElementById('character');
   select.innerHTML='<option value="">Выбрать персонажа</option>';
+
   if(Array.isArray(data)){
    data.forEach((item,i)=>{
-    const name=typeof item==='string'?item:(item.name||item.title||'Персонаж '+(i+1));
-    const opt=document.createElement('option');
-    opt.value=String(i);
-    opt.textContent=name;
-    select.appendChild(opt);
+    const name=typeof item==='string'
+     ?item
+     :(item.name||item.title||'Персонаж '+(i+1));
+
+    const option=document.createElement('option');
+    option.value=String(i);
+    option.textContent=name;
+    select.appendChild(option);
    });
   }
+
   document.getElementById('status').textContent=
-   'Найдено персонажей: '+(Array.isArray(data)?data.length:0);
+   'Персонажей найдено: '+(Array.isArray(data)?data.length:0);
+
  }catch(e){
-  document.getElementById('status').textContent='Не удалось прочитать библиотеку.';
+  document.getElementById('status').textContent=
+   'Ошибка чтения библиотеки.';
  }
 }
 
@@ -178,3 +310,4 @@ loadCharacters();
 </script>
 </body>
 </html>
+
