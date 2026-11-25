@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай 2.0 — проверка движений</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101722;color:#eef3fa;font:16px system-ui,sans-serif}
+main{max-width:900px;margin:auto;padding:18px}h1{font-size:23px;margin:4px 0 8px}
+p{color:#b8c4d4;line-height:1.45}.stage{background:#e8edf3;border-radius:16px;overflow:hidden}
+canvas{display:block;width:100%;height:auto;touch-action:manipulation}
+.controls{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}
+button{border:0;border-radius:10px;padding:12px 15px;background:#2d77d3;color:white;font-weight:650}
+input{flex:1;min-width:190px;padding:12px;border-radius:10px;border:1px solid #536174;background:#1a2635;color:white}
+.note{font-size:13px;color:#9eacbd}
+</style>
+</head>
+<body><main>
+<h1>Киномастер-Ай 2.0 — стенд проверки движений</h1>
+<p>Пробный отдельный стенд. Здесь проверяются базовые движения и расчёт суставов. Это ещё не интеграция в основную мастерскую.</p>
+<div class="stage"><canvas id="scene" width="800" height="560"></canvas></div>
+<div class="controls">
+<button data-move="wave">Помахать</button><button data-move="both">Поднять обе руки</button>
+<button data-move="walk">Идти</button><button data-move="run">Бежать</button>
+<button data-move="squat">Присесть</button><button data-move="turn">Повернуть голову</button>
+<button data-move="idle">Стоп</button>
+</div>
+<div class="controls"><input id="command" placeholder="Например: Петрович машет рукой"><button id="go">Выполнить</button></div>
+<p class="note">Подсказка: нажми любую кнопку движения. Для текстовой команды используй слова «машет», «обе руки», «идёт», «бежит», «присесть», «повернуть голову».</p>
+</main>
+<script>
+const c=document.getElementById('scene'),ctx=c.getContext('2d');
+let mode='idle',start=performance.now();
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function joint(a,b,len,side=1){
+ const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.hypot(dx,dy));
+ const along=d/2,h=Math.sqrt(Math.max(0,len*len-along*along));
+ const ux=dx/d,uy=dy/d;
+ return {x:a.x+ux*along-side*uy*h,y:a.y+uy*along+side*ux*h};
+}
+function line(a,b,w=17){ctx.lineCap='round';ctx.lineWidth=w;ctx.strokeStyle='#344b63';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+function circle(x,y,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+function draw(t){
+ const s=(t-start)/1000, bob=mode==='walk'?Math.sin(s*8)*8:mode==='run'?Math.sin(s*14)*15:mode==='squat'?Math.sin(s*3)*24:0;
+ ctx.clearRect(0,0,800,560);ctx.fillStyle='#e8edf3';ctx.fillRect(0,0,800,560);
+ ctx.strokeStyle='#c4ced9';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(80,480);ctx.lineTo(720,480);ctx.stroke();
+ const hip={x:400,y:330+bob},neck={x:400,y:205+bob},head={x:400+(mode==='turn'?Math.sin(s*1.5)*8:0),y:155+bob};
+ const shoulderL={x:365,y:225+bob},shoulderR={x:435,y:225+bob};
+ let wave=mode==='wave'?Math.sin(s*7):0;
+ function arm(sh,side){
+   let target;
+   if(mode==='both') target={x:sh.x+side*42,y:120+bob};
+   else if(mode==='wave'&&side===1) target={x:sh.x+side*(75+wave*12),y:125+Math.abs(wave)*15};
+   else target={x:sh.x+side*65,y:320+bob};
+   const elbow=joint(sh,target,76,side);
+   line(sh,elbow,20);line(elbow,target,16);circle(target.x,target.y,11,'#d59a70');
+ }
+ arm(shoulderL,-1);arm(shoulderR,1);
+ line(neck,hip,42);
+ const stride=mode==='walk'?Math.sin(s*8)*32:mode==='run'?Math.sin(s*14)*48:0;
+ const kneeL={x:370-stride*.35,y:405+bob},footL={x:350-stride,y:475};
+ const kneeR={x:430+stride*.35,y:405+bob},footR={x:450+stride,y:475};
+ if(mode==='squat'){kneeL.y=390+bob;kneeR.y=390+bob;footL.x=330;footR.x=470}
+ line(hip,kneeL,23);line(kneeL,footL,19);line(hip,kneeR,23);line(kneeR,footR,19);
+ circle(head.x,head.y,48,'#d59a70');
+ const faceW=mode==='turn'?30:38,eyeX=mode==='turn'?head.x+10:head.x+14;
+ ctx.fillStyle='#26384b';ctx.beginPath();ctx.ellipse(head.x+5,head.y+5,faceW,39,0,0,Math.PI*2);ctx.fill();
+ circle(eyeX,head.y-8,4,'#fff');circle(eyeX+1,head.y-8,2,'#26384b');
+ ctx.strokeStyle='#26384b';ctx.lineWidth=4;ctx.beginPath();ctx.arc(head.x+13,head.y+17,10,0.15,1.8);ctx.stroke();
+ ctx.fillStyle='#24364a';ctx.font='bold 22px system-ui';ctx.fillText('Петрович — тестовый манекен',24,38);
+ ctx.fillStyle='#526477';ctx.font='16px system-ui';ctx.fillText('Режим: '+mode,24,66);
+ requestAnimationFrame(draw);
+}
+document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{mode=b.dataset.move;start=performance.now()});
+function parse(){let v=document.getElementById('command').value.toLowerCase();
+ if(v.includes('маш')||v.includes('мах'))mode='wave';
+ else if(v.includes('обе')||v.includes('две руки'))mode='both';
+ else if(v.includes('беж'))mode='run';
+ else if(v.includes('ид')||v.includes('ход'))mode='walk';
+ else if(v.includes('прис'))mode='squat';
+ else if(v.includes('голов')||v.includes('повер'))mode='turn';
+ else mode='idle';start=performance.now()}
+document.getElementById('go').onclick=parse;
+document.getElementById('command').addEventListener('keydown',e=>{if(e.key==='Enter')parse()});
+requestAnimationFrame(draw);
+</script></body></html>
