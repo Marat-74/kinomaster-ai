@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Киномастер — автоматическое разделение персонажа (исправлено)</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:15px;background:#171b25;color:#fff;font-family:Arial,sans-serif}
+.panel{background:#252e40;padding:14px;border-radius:14px;margin:12px 0}
+button{padding:12px;margin:5px 2px;border:0;border-radius:9px;background:#2676d9;color:#fff;font-size:15px;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+canvas{display:block;width:100%;height:auto;background:#353b48;border-radius:8px}
+input{max-width:100%}
+small{color:#bbc8da;line-height:1.5}
+.part{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid #465166;padding:9px 0}
+#status{color:#9ee5b1;line-height:1.5;overflow-wrap:anywhere}
+.note{color:#ffd58a;line-height:1.5}
+.actions{display:flex;gap:5px;flex-wrap:wrap}
+.actions button{font-size:14px;padding:10px}
+</style>
+</head>
+<body>
+<h2>Киномастер-Ай 2.0</h2>
+<h3>Автоматическое разделение персонажа — исправленная версия</h3>
+<div class="panel">
+ <b>1. Загрузи PNG Петровича</b>
+ <p><small>Используй PNG с уже удалённым фоном — тот файл, который сохранил через «Поделиться PNG».</small></p>
+ <input type="file" id="file" accept="image/png,image/*">
+</div>
+<div class="panel">
+ <b>2. Распознавание персонажа</b>
+ <p><small>Модель определит суставы на уменьшенной копии изображения. Сам исходный PNG останется в полном разрешении. Дополнительная сегментация фона отключена, потому что фон уже прозрачный.</small></p>
+ <button id="recognize" disabled>Распознать и разделить автоматически</button>
+ <p id="status">Ожидаю изображение.</p>
+</div>
+<div class="panel">
+ <b>3. Исходный персонаж</b>
+ <canvas id="source"></canvas>
+</div>
+<div class="panel">
+ <b>4. Полученные части тела</b>
+ <p><small>Каждая часть создаётся в исходном размере холста с прозрачным фоном. Сначала проверь руки. Нажми «Поделиться PNG», затем в меню iPhone выбери «Сохранить в Файлы».</small></p>
+ <div id="parts"><div class="part">Части ещё не распознаны</div></div>
+ <button id="all" disabled>Скачать все части</button>
+ <p class="note"><small>Важно: это предварительное распределение пикселей по ближайшим суставам, а не окончательная анатомическая разрезка. На местах пересечения рук и туловища могут понадобиться исправления.</small></p>
+</div>
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const $=id=>document.getElementById(id);
+const canvas=$("source"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+let image=null,original=null,poseModel=null,results={},fileBase="Petrovich";
+const names=[["head","Голова"],["torso","Туловище"],["leftArm","Левая рука"],["rightArm","Правая рука"],["leftLeg","Левая нога"],["rightLeg","Правая нога"]];
+$("file").addEventListener("change",e=>{
+ const f=e.target.files&&e.target.files[0];if(!f)return;
+ fileBase=(f.name||"Petrovich").replace(/\.[^.]+$/,'').replace(/[^a-zA-Zа-яА-Я0-9_-]/g,'_');
+ const url=URL.createObjectURL(f),im=new Image();
+ im.onload=()=>{
+  image=im;
+  const scale=Math.min(1000/im.width,1000/im.height,1);
+  canvas.width=Math.max(1,Math.round(im.width*scale));canvas.height=Math.max(1,Math.round(im.height*scale));
+  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(im,0,0,canvas.width,canvas.height);
+  original=ctx.getImageData(0,0,canvas.width,canvas.height);
+  results={};$("recognize").disabled=false;$("all").disabled=true;
+  $("parts").innerHTML='<div class="part">Части ещё не распознаны</div>';
+  $("status").textContent=`Изображение загружено: ${canvas.width} × ${canvas.height}. Готово к распознаванию.`;
+  URL.revokeObjectURL(url);
+ };
+ im.onerror=()=>{$("status").textContent="Не удалось открыть изображение. Попробуй ещё раз сохранить PNG.";URL.revokeObjectURL(url);};
+ im.src=url;
+});
+async function loadModel(){
+ if(poseModel)return poseModel;
+ $("status").textContent="Шаг 1/3: загружаем модель суставов…";
+ const vision=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+ poseModel=await PoseLandmarker.createFromOptions(vision,{
+  baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",delegate:"CPU"},
+  runningMode:"IMAGE",numPoses:1
+ });
+ return poseModel;
+}
+function distSegment(px,py,a,b){const dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;let t=len?((px-a.x)*dx+(py-a.y)*dy)/len:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-(a.x+t*dx),py-(a.y+t*dy));}
+function midpoint(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
+function segmentList(lm,w,h){
+ const p=i=>({x:lm[i].x*w,y:lm[i].y*h});
+ const shoulder=midpoint(p(11),p(12)),hip=midpoint(p(23),p(24));
+ const shoulderWidth=Math.max(12,Math.hypot(p(11).x-p(12).x,p(11).y-p(12).y));
+ return{
+  head:{point:p(0),radius:Math.max(shoulderWidth*.58,18)},
+  torso:{segments:[[shoulder,hip]],radius:Math.max(shoulderWidth*.52,18)},
+  leftArm:{segments:[[p(11),p(13)],[p(13),p(15)]],radius:Math.max(shoulderWidth*.22,9)},
+  rightArm:{segments:[[p(12),p(14)],[p(14),p(16)]],radius:Math.max(shoulderWidth*.22,9)},
+  leftLeg:{segments:[[p(23),p(25)],[p(25),p(27)]],radius:Math.max(shoulderWidth*.25,10)},
+  rightLeg:{segments:[[p(24),p(26)],[p(26),p(28)]],radius:Math.max(shoulderWidth*.25,10)}
+ };
+}
+function regionDistance(x,y,r){if(r.point)return Math.max(0,Math.hypot(x-r.point.x,y-r.point.y)-r.radius);let best=Infinity;for(const s of r.segments)best=Math.min(best,distSegment(x,y,s[0],s[1]));return Math.max(0,best-r.radius);}
+function getForeground(){
+ const w=canvas.width,h=canvas.height,alpha=new Uint8Array(w*h);let transparentPixels=0,solidPixels=0;
+ for(let i=0;i<w*h;i++){const a=original.data[i*4+3];if(a<245)transparentPixels++;if(a>20)solidPixels++;}
+ if(!solidPixels)throw new Error("Изображение оказалось полностью прозрачным.");
+ if(transparentPixels<Math.max(20,w*h*.001))throw new Error("В этом PNG не обнаружена прозрачность. Загрузи Petrovich-restored.png с удалённым фоном.");
+ for(let i=0;i<w*h;i++)alpha[i]=original.data[i*4+3]>20?1:0;
+ return alpha;
+}
+function split(lm,foreground){
+ const w=canvas.width,h=canvas.height,regions=segmentList(lm,w,h),masks={};
+ for(const [id] of names)masks[id]=new Uint8Array(w*h);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const i=y*w+x;if(!foreground[i])continue;
+  let best=null,bestDistance=Infinity;
+  for(const [id] of names){const d=regionDistance(x,y,regions[id]);if(d<bestDistance){bestDistance=d;best=id;}}
+  masks[best][i]=1;
+ }
+ return masks;
+}
+function renderPart(id){
+ const mask=results[id];if(!mask)return null;
+ const out=document.createElement("canvas");out.width=canvas.width;out.height=canvas.height;
+ const c=out.getContext("2d"),data=new ImageData(out.width,out.height);
+ for(let i=0;i<mask.length;i++)if(mask[i]){const j=i*4;data.data[j]=original.data[j];data.data[j+1]=original.data[j+1];data.data[j+2]=original.data[j+2];data.data[j+3]=original.data[j+3];}
+ c.putImageData(data,0,0);return out;
+}
+function partBlob(id){return new Promise((resolve,reject)=>{const out=renderPart(id);if(!out)return reject(new Error("Нет данных этой части"));out.toBlob(b=>b?resolve(b):reject(new Error("Не удалось создать PNG")),"image/png");});}
+async function sharePart(id){
+ try{
+  const blob=await partBlob(id),filename=`${fileBase}-${id}.png`,file=new File([blob],filename,{type:"image/png"});
+  if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:filename});$("status").textContent=`Открыто меню «Поделиться» для ${filename}. Выбери «Сохранить в Файлы».`;}
+  else{downloadBlob(blob,filename);$("status").textContent="На этом устройстве системная отправка файла недоступна. Начата обычная загрузка PNG.";}
+ }catch(e){if(e.name==="AbortError"){$("status").textContent="Меню отправки закрыто. Файл не отправлялся.";}else{$("status").textContent="Ошибка подготовки PNG: "+e.message;}}
+}
+function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+async function download(id){try{const b=await partBlob(id);downloadBlob(b,`${fileBase}-${id}.png`);}catch(e){$("status").textContent=e.message;}}
+$("recognize").addEventListener("click",async()=>{
+ if(!image||!original)return;
+ $("recognize").disabled=true;$("all").disabled=true;results={};
+ try{
+  const model=await loadModel();
+  $("status").textContent="Шаг 2/3: готовим уменьшенную копию для распознавания…";
+  const maxSide=512,scale=Math.min(maxSide/canvas.width,maxSide/canvas.height,1);
+  const dw=Math.max(1,Math.round(canvas.width*scale)),dh=Math.max(1,Math.round(canvas.height*scale));
+  const detectCanvas=document.createElement("canvas");detectCanvas.width=dw;detectCanvas.height=dh;
+  detectCanvas.getContext("2d").drawImage(canvas,0,0,dw,dh);
+  $("status").textContent=`Шаг 2/3: распознаём суставы на копии ${dw} × ${dh}…`;
+  const result=model.detect(detectCanvas);
+  if(!result.landmarks||!result.landmarks.length)throw new Error("Модель не распознала позу. Попробуем другой способ расстановки суставов.");
+  const lm=result.landmarks[0],required=[0,11,12,13,14,15,16,23,24,25,26,27,28];
+  for(const i of required){const v=lm[i]&&lm[i].visibility;if(!lm[i]||(v!==undefined&&v<.12))throw new Error(`Не удалось уверенно определить сустав №${i}. Попробуй изображение с более заметными руками и ногами.`);}
+  $("status").textContent="Шаг 3/3: распределяем прозрачный силуэт по шести зонам…";
+  const foreground=getForeground();results=split(lm,foreground);
+  $("parts").innerHTML="";let total=0;
+  for(const [id,label] of names){
+   const count=results[id].reduce((a,b)=>a+b,0);total+=count;
+   const row=document.createElement("div");row.className="part";
+   const span=document.createElement("span");span.textContent=`${label} — ${count?"выделена":"не найдена"}`;
+   const actions=document.createElement("div");actions.className="actions";
+   const share=document.createElement("button");share.textContent="Поделиться PNG";share.disabled=!count;share.addEventListener("click",()=>sharePart(id));
+   const save=document.createElement("button");save.textContent="Скачать";save.disabled=!count;save.addEventListener("click",()=>download(id));
+   actions.append(share,save);row.append(span,actions);$("parts").append(row);
+  }
+  if(!total)throw new Error("Не удалось распределить пиксели персонажа. Проверь прозрачность исходного PNG.");
+  $("all").disabled=false;
+  $("status").textContent="Готово. Получено шесть предварительных масок. Сначала проверь левую и правую руки — границы могут требовать ручной коррекции.";
+ }catch(e){console.error(e);let msg=e&&e.message?e.message:String(e);if(/Aborted|abort\(\)|RuntimeError/i.test(msg))msg="Модуль распознавания аварийно остановился даже на уменьшенной копии. Это уже не ошибка PNG; пришли этот экран, и мы проверим совместимость модели с Safari.";$("status").textContent="Не удалось разделить персонажа: "+msg;}
+ finally{$("recognize").disabled=false;}
+});
+$("all").addEventListener("click",async()=>{for(const [id] of names){if(results[id]&&results[id].some(Boolean)){await download(id);await new Promise(r=>setTimeout(r,900));}}$("status").textContent="Подготовлены отдельные загрузки PNG. Если Safari блокирует несколько файлов подряд, сохраняй части по одной через «Поделиться PNG».";});
+</script>
+</body>
+</html>
