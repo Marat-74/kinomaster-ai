@@ -31,4 +31,3 @@ $('#idle').addEventListener('click',ensureLoop);$('#stop').addEventListener('cli
 $('#reset').addEventListener('click',()=>{if(!player)return;stopLoop();if(motion?.stopExpression)motion.stopExpression();for(const p of defaults)player.setParameter(p.id,p.value);buildControls();});
 $('#clearExpression').addEventListener('click',()=>{if(!motion)return;ensureLoop();motion.stopExpression();say('Эмоция плавно убирается.');});
 </script></body></html>
-
