@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай — тест анимации Iki 4</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#10141c;color:#edf2f7}
+*{box-sizing:border-box}body{margin:0;padding:16px;max-width:1050px;margin:auto}
+h1{font-size:22px;margin:4px 0 8px}.sub{color:#aab6c5;font-size:14px;line-height:1.5}
+.panel{background:#1a2230;border:1px solid #344154;border-radius:14px;padding:14px;margin:14px 0}
+button,.file{background:#315d91;color:white;border:0;border-radius:10px;padding:11px 14px;font-size:14px;cursor:pointer}
+button:disabled{opacity:.45}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.stage{background:#080b11;border:1px solid #344154;border-radius:14px;min-height:320px;overflow:hidden}
+canvas{display:block;width:100%;height:min(68vh,650px);min-height:320px}
+#status{font-size:13px;color:#aab6c5;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px}
+.controls,.motionlist,.expressions{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.control,.motionitem{background:#111925;border-radius:10px;padding:10px}
+.control label{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:7px}
+.control label span:first-child{overflow-wrap:anywhere}input[type=range]{width:100%}
+small{color:#9aa8ba}.ok{color:#83d6a4!important}.err{color:#ff9b9b!important}
+.motionitem button{width:100%;margin-bottom:7px}.motionitem p{font-size:12px;color:#aab6c5;margin:0;line-height:1.4}
+#diagnostic{background:#0b111a;border:1px solid #5b3540;border-radius:10px;padding:12px;margin-top:12px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;display:none}
+</style>
+</head>
+<body>
+<h1>Киномастер-Ай 2.0 — тест анимации Iki 4</h1>
+<div class="sub">Русская версия тестовой мастерской. Проверяет загрузку модели, формат Iki и запуск WebGL. Предыдущие версии не затрагивает.</div>
+
+<div class="panel">
+<b>Загрузка персонажа</b>
+<div class="actions">
+<button id="sample">Загрузить тестовую девочку</button>
+<label class="file">Выбрать файл персонажа (.iki)<input id="file" type="file" accept=".iki,.json,application/json" hidden></label>
+<button id="copyError" disabled>Скопировать отчёт об ошибке</button>
+</div>
+<div id="status">Жду персонажа. Нажмите «Загрузить тестовую девочку» или выберите свой файл.</div>
+<div id="diagnostic"></div>
+</div>
+
+<div class="stage"><canvas id="view"></canvas></div>
+
+<div class="panel"><b>Библиотека движений</b>
+<p class="sub">Здесь появятся движения, которые уже есть в загруженной модели.</p>
+<div id="motions" class="motionlist"><small>Сначала загрузите модель.</small></div>
+<div class="actions"><button id="idle" disabled>Запустить обычное состояние</button><button id="stop" disabled>Остановить анимацию</button><button id="reset" disabled>Вернуть исходную позу</button></div>
+</div>
+
+<div class="panel"><b>Выражения лица</b>
+<p class="sub">Проверяем эмоции, которые предусмотрены в модели.</p>
+<div id="expressions" class="expressions"><small>Сначала загрузите модель.</small></div>
+<div class="actions"><button id="clearExpression" disabled>Убрать выражение</button></div>
+</div>
+
+<div class="panel"><b>Настройка параметров персонажа</b><div id="controls" class="controls"><small>Сначала загрузите модель.</small></div></div>
+<div class="sub">Техническая основа: Iki Engine 0.13.0 и Iki Format 0.12.0. Нужны HTTPS, поддержка WebGL2 и подключение к интернету.</div>
+
+<script type="module">
+const $=s=>document.querySelector(s),canvas=$('#view'),status=$('#status'),controls=$('#controls');
+const diagnostic=$('#diagnostic'),copyError=$('#copyError');
+const sampleUrl='https://raw.githubusercontent.com/zeikar/iki/main/examples/playground/public/bob.iki';
+let player=null,motion=null,model=null,raf=null,defaults=[],lastDiagnostic='';
+let stage='Подготовка';
+function say(t,c=''){status.className=c;status.textContent=t;}
+function reportError(err,where=stage){
+  const msg=err?.message||String(err);
+  const stack=err?.stack||'(стек не предоставлен)';
+  lastDiagnostic='Этап: '+where+'\nТип ошибки: '+(err?.name||'Error')+'\nСообщение: '+msg+'\n\nСтек:\n'+stack;
+  say('ОШИБКА на этапе: '+where+'\n'+msg,'err');
+  diagnostic.style.display='block';diagnostic.textContent=lastDiagnostic;
+  copyError.disabled=false;
+}
+window.addEventListener('error',e=>reportError(e.error||new Error(e.message),'Общая ошибка JavaScript'));
+window.addEventListener('unhandledrejection',e=>reportError(e.reason||new Error('Неизвестная ошибка Promise'),'Ошибка фоновой операции'));
+copyError.addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText(lastDiagnostic);copyError.textContent='Отчёт скопирован';}
+  catch(e){say('Не получилось скопировать автоматически. Можно выделить текст отчёта ниже.','err');}
+});
+function resize(){const d=Math.min(devicePixelRatio||1,2),w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),W=Math.round(w*d),H=Math.round(h*d);if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;}}
+if('ResizeObserver' in window)new ResizeObserver(resize).observe(canvas);resize();
+function stopLoop(){if(raf!==null)cancelAnimationFrame(raf);raf=null;}
+function ensureLoop(){if(raf!==null||!motion)return;const tick=now=>{if(!motion){raf=null;return;}motion.update(now);raf=requestAnimationFrame(tick);};raf=requestAnimationFrame(tick);}
+const motionNames={Idle:'Обычное состояние',idle:'Обычное состояние',Nod:'Кивок',nod:'Кивок',Shake:'Покачивание головой',shake:'Покачивание головой',Tilt:'Наклон головы',tilt:'Наклон головы',Walk:'Ходьба',walk:'Ходьба',Run:'Бег',run:'Бег',Jump:'Прыжок',jump:'Прыжок',Talk:'Разговор',talk:'Разговор'};
+const expressionNames={smile:'Улыбка',laugh:'Смех',angry:'Злость',sad:'Грусть',surprised:'Удивление',shy:'Смущение',happy:'Радость',neutral:'Спокойствие'};
+function translateMotion(v){return motionNames[v]||v;}
+function translateExpression(v){return expressionNames[String(v).toLowerCase()]||v;}
+function buildControls(){
+  controls.innerHTML='';const ps=player.getParameters();defaults=ps.map(p=>({id:p.id,value:p.default}));
+  if(!ps.length){controls.textContent='У модели нет объявленных параметров.';return;}
+  for(const p of ps){const box=document.createElement('div');box.className='control';const lab=document.createElement('label'),name=document.createElement('span'),val=document.createElement('span');
+    name.textContent=p.name||p.id;val.textContent=Number(p.default).toFixed(2);lab.append(name,val);
+    const input=document.createElement('input');input.type='range';input.min=p.min;input.max=p.max;input.step=Math.max((p.max-p.min)/300,0.001);input.value=p.default;
+    input.addEventListener('input',()=>{const n=Number(input.value);player.setParameter(p.id,n);val.textContent=n.toFixed(2);});
+    box.append(lab,input);controls.append(box);
+  }
+}
+function buildMotions(){
+  const root=$('#motions');root.innerHTML='';const groups=model.motions||{};let count=0;
+  for(const [group,clips] of Object.entries(groups)){(clips||[]).forEach((clip,index)=>{count++;const box=document.createElement('div');box.className='motionitem';const b=document.createElement('button');b.textContent=translateMotion(group)+' · '+(index+1);
+    b.addEventListener('click',()=>{ensureLoop();const ok=motion.playMotion(group,index);say(ok?'Запущено движение: '+translateMotion(group)+' ('+(index+1)+')':'Не удалось запустить движение: '+translateMotion(group),'');});
+    const p=document.createElement('p');p.textContent=clip.description||('Длительность: '+(clip.duration??'?')+' сек.');box.append(b,p);root.append(box);
+  });}
+  if(!count)root.textContent='В этой модели нет готовых клипов движений.';
+}
+function buildExpressions(){
+  const root=$('#expressions');root.innerHTML='';const list=model.expressions||[];
+  for(const exp of list){const b=document.createElement('button');b.textContent=translateExpression(exp.id);b.title=(exp.description?exp.description+' · ':'')+'Код выражения: '+exp.id;
+    b.addEventListener('click',()=>{ensureLoop();const ok=motion.playExpression(exp.id);say(ok?'Выражение лица включено: '+translateExpression(exp.id):'Не удалось включить выражение лица: '+translateExpression(exp.id),'');});root.append(b);}
+  if(!list.length)root.textContent='В этой модели нет готовых выражений лица.';$('#clearExpression').disabled=!list.length;
+}
+async function loadJson(json,label){
+  diagnostic.style.display='none';copyError.disabled=true;lastDiagnostic='';
+  try{
+    stage='Подключение анимационного движка Iki';
+    say('Шаг 1 из 4. Подключаю анимационный движок…');
+    const [{IkiPlayer,IkiMotion},{loadIkiModel}]=await Promise.all([
+      import('https://esm.sh/@ikijs/engine@0.13.0?bundle'),
+      import('https://esm.sh/@ikijs/format@0.12.0?bundle')
+    ]);
+    stage='Проверка файла персонажа';
+    say('Шаг 2 из 4. Проверяю содержимое файла…');
+    let raw;
+    try{raw=JSON.parse(json);}catch(e){throw new Error('Файл не является корректным JSON: '+e.message);}
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('Корень файла должен быть JSON-объектом.');
+    const summary='Файл прочитан. Версия формата: '+raw.version+', имя модели: '+raw.name+', частей: '+(Array.isArray(raw.parts)?raw.parts.length:'нет')+', параметров: '+(Array.isArray(raw.parameters)?raw.parameters.length:'нет')+'.';
+    stage='Проверка структуры модели Iki';
+    say('Шаг 3 из 4. '+summary+'\nПроверяю, подходит ли модель для движка…');
+    let parsed;
+    try{parsed=loadIkiModel(json);}catch(e){e.message='Проверка формата Iki не пройдена: '+(e.message||String(e));throw e;}
+    if(!parsed||!Array.isArray(parsed.parts))throw new Error('Проверка завершилась, но модель не содержит списка parts.');
+    stage='Запуск анимации и загрузка изображений';
+    say('Шаг 4 из 4. Модель подходит. Загружаю изображения и запускаю анимацию…');
+    const next=new IkiPlayer(canvas);
+    let result;
+    try{result=await next.load(parsed);}catch(e){next.destroy();throw e;}
+    if(result.superseded){next.destroy();throw new Error('Загрузка модели была прервана другой загрузкой.');}
+    stopLoop();if(player){player.destroy();}
+    player=next;model=parsed;motion=new IkiMotion(model,id=>player.getParameter(id),(id,v)=>player.setParameter(id,v));
+    player.start();buildControls();buildMotions();buildExpressions();
+    $('#idle').disabled=false;$('#stop').disabled=false;$('#reset').disabled=false;
+    const failed=result.failedTextures||[];
+    stage='Готово';
+    say('ПЕРСОНАЖ ЗАГРУЖЕН: '+label+'\nЧастей тела: '+model.parts.length+' · Параметров: '+model.parameters.length+' · Наборов движений: '+Object.keys(model.motions||{}).length+' · Выражений лица: '+(model.expressions||[]).length+' · Проблем с изображениями: '+failed.length,failed.length?'':'ok');
+    if(failed.length){lastDiagnostic='Модель загружена, но есть ошибки текстур:\n'+JSON.stringify(failed,null,2);diagnostic.style.display='block';diagnostic.textContent=lastDiagnostic;copyError.disabled=false;}
+  }catch(e){reportError(e,stage);}
+}
+$('#sample').addEventListener('click',async()=>{
+  try{stage='Загрузка тестовой модели';say('Загружаю тестовую модель…');const r=await fetch(sampleUrl,{cache:'no-store'});
+    if(!r.ok)throw new Error('Не удалось получить bob.iki: HTTP '+r.status);
+    await loadJson(await r.text(),'bob.iki');
+  }catch(e){reportError(e,'Загрузка публичной тестовой модели');}
+});
+$('#file').addEventListener('change',async e=>{
+  const f=e.target.files?.[0];if(!f)return;
+  try{await loadJson(await f.text(),f.name);}catch(err){reportError(err,'Чтение выбранного файла');}
+  e.target.value='';
+});
+$('#idle').addEventListener('click',ensureLoop);$('#stop').addEventListener('click',stopLoop);
+$('#reset').addEventListener('click',()=>{if(!player)return;stopLoop();if(motion?.stopExpression)motion.stopExpression();for(const p of defaults)player.setParameter(p.id,p.value);buildControls();});
+$('#clearExpression').addEventListener('click',()=>{if(!motion)return;ensureLoop();motion.stopExpression();say('Выражение лица плавно возвращается к обычному.');});
+</script>
+</body>
+</html>
