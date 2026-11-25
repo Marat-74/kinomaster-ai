@@ -1,0 +1,15 @@
+
+{
+  "name": "kinomaster-ai-v2",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Киномастер-Ай 2.0 — универсальная система скелетной 2D-анимации персонажей",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
