@@ -1,0 +1,202 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Киномастер-Ай 2.0 — Студия</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:#101827;color:#f1f5f9;font-family:Arial,sans-serif}
+main{max-width:850px;margin:auto}
+h1{font-size:25px}
+p{color:#aebbd0;line-height:1.5}
+textarea{width:100%;min-height:100px;padding:14px;border-radius:10px;border:1px solid #42516a;background:#1c293b;color:white;font-size:16px}
+button{padding:12px 16px;margin:5px 4px 5px 0;border:0;border-radius:9px;background:#3478e5;color:white;font-size:15px;cursor:pointer}
+button.secondary{background:#344256}
+.panel{background:#1b293c;padding:16px;border-radius:14px;margin:16px 0}
+#stage{width:100%;max-width:520px;margin:auto;display:block;background:#e8edf3;border-radius:12px}
+#status{color:#83d6a5;min-height:24px}
+.small{font-size:13px;color:#aebbd0}
+</style>
+</head>
+<body>
+<main>
+<h1>🎬 Киномастер-Ай 2.0</h1>
+<p>Опиши движение персонажа обычными словами. Студия попробует преобразовать описание в анимацию.</p>
+
+<section class="panel">
+<textarea id="command" placeholder="Например: Петрович поднимает правую руку и машет ею"></textarea>
+<button id="run">Создать движение</button>
+<button class="secondary" id="stop">Стоп</button>
+<div id="status">Персонаж готов к работе.</div>
+</section>
+
+<section class="panel">
+<strong>Примеры команд:</strong><br>
+<button class="secondary example" data-command="Петрович поднимает правую руку">Поднять правую руку</button>
+<button class="secondary example" data-command="Петрович машет правой рукой">Помахать рукой</button>
+<button class="secondary example" data-command="Петрович поднимает обе руки">Поднять обе руки</button>
+<button class="secondary example" data-command="Петрович поворачивает голову налево">Повернуть голову</button>
+</section>
+
+<section class="panel">
+<strong>Предварительный просмотр</strong>
+<svg id="stage" viewBox="0 0 400 430">
+<rect width="400" height="430" fill="#e8edf3"/>
+<ellipse cx="200" cy="400" rx="100" ry="12" fill="#cbd5e1"/>
+<g id="character" stroke="#26374c" stroke-width="12" stroke-linecap="round" fill="none">
+<!-- Ноги -->
+<path d="M185 275 L170 365 L155 385"/>
+<path d="M215 275 L230 365 L245 385"/>
+<!-- Тело -->
+<path d="M200 145 L200 280" stroke-width="25"/>
+<!-- Левая рука -->
+<g id="leftArm">
+<path d="M200 165 L145 225 L125 285"/>
+<circle cx="125" cy="285" r="7" fill="#26374c"/>
+</g>
+<!-- Правая рука -->
+<g id="rightArm">
+<path d="M200 165 L255 225 L275 285"/>
+<circle cx="275" cy="285" r="7" fill="#26374c"/>
+</g>
+<!-- Голова -->
+<g id="head">
+<circle cx="200" cy="100" r="43" fill="#f1c7a0" stroke="#26374c" stroke-width="5"/>
+<path d="M180 105 Q188 112 195 105 M205 105 Q213 112 220 105" stroke-width="3"/>
+<path d="M190 125 Q200 135 212 125" stroke-width="3"/>
+<path d="M160 75 Q200 35 240 75" stroke="#6b4c36" stroke-width="12"/>
+</g>
+</g>
+<text x="200" y="420" text-anchor="middle" font-size="12" fill="#526174">Тестовый персонаж</text>
+</svg>
+<p class="small">Пока используется условная модель. Подключение настоящих рисунков персонажей и автоматическое разделение на части — следующий этап.</p>
+</section>
+
+<section class="panel">
+<strong>Что умеет эта версия</strong>
+<p>• Распознаёт несколько русских команд.<br>
+• Создаёт ключевые кадры движения.<br>
+• Использует модули скелета и анимации проекта.<br>
+• Показывает результат прямо в браузере.</p>
+</section>
+</main>
+
+<script type="module">
+import {createRig,addBone} from "./core/rig-graph.js";
+import {createMotion,addKeyframe,evaluateMotion} from "./core/motion-engine.js";
+import {createPose,applyMotionToPose} from "./core/pose-adapter.js";
+
+const rig=createRig("Тестовый персонаж");
+
+const torso=addBone(rig,{name:"Тело",start:{x:200,y:145},end:{x:200,y:280}});
+const rightArm=addBone(rig,{name:"Правая рука",parentId:torso.id,start:{x:200,y:165},end:{x:275,y:285}});
+const leftArm=addBone(rig,{name:"Левая рука",parentId:torso.id,start:{x:200,y:165},end:{x:125,y:285}});
+const head=addBone(rig,{name:"Голова",parentId:torso.id,start:{x:200,y:100},end:{x:200,y:110}});
+
+const basePose=createPose(rig);
+let animationFrame=null;
+let active=false;
+
+const status=document.getElementById("status");
+const command=document.getElementById("command");
+
+function stop(){
+ active=false;
+ if(animationFrame) cancelAnimationFrame(animationFrame);
+ animationFrame=null;
+}
+
+function render(values){
+ const pose=applyMotionToPose(basePose,values);
+ document.getElementById("rightArm").setAttribute(
+  "transform",`rotate(${pose.bones[rightArm.id].rotation||0} 200 165)`
+ );
+ document.getElementById("leftArm").setAttribute(
+  "transform",`rotate(${pose.bones[leftArm.id].rotation||0} 200 165)`
+ );
+ document.getElementById("head").setAttribute(
+  "transform",`rotate(${pose.bones[head.id].rotation||0} 200 100)`
+ );
+}
+
+function createAnimation(text){
+ const t=text.toLowerCase();
+ const motion=createMotion({name:text,duration:1400,loop:true});
+
+ const targets=[];
+ if(t.includes("прав") && (t.includes("рук") || t.includes("мах"))) targets.push(rightArm.id);
+ if(t.includes("лев") && (t.includes("рук") || t.includes("мах"))) targets.push(leftArm.id);
+ if(t.includes("обе") || t.includes("две")) targets.push(rightArm.id,leftArm.id);
+
+ if(t.includes("рук") || t.includes("мах")){
+  if(!targets.length) targets.push(rightArm.id);
+  for(const id of targets){
+   const direction=id===rightArm.id?1:-1;
+   const waving=t.includes("мах") || t.includes("машет");
+   const raised=direction*(waving?-115:-145);
+   addKeyframe(motion,{time:0,target:id,values:{rotation:0}});
+   addKeyframe(motion,{time:400,target:id,values:{rotation:raised}});
+   addKeyframe(motion,{time:800,target:id,values:{rotation:waving?raised+45:raised}});
+   addKeyframe(motion,{time:1200,target:id,values:{rotation:raised}});
+   addKeyframe(motion,{time:1400,target:id,values:{rotation:0}});
+  }
+ }
+
+ if(t.includes("голов") || t.includes("поворач")){
+  let angle=t.includes("налево") || t.includes("влево")?-25:25;
+  addKeyframe(motion,{time:0,target:head.id,values:{rotation:0}});
+  addKeyframe(motion,{time:500,target:head.id,values:{rotation:angle}});
+  addKeyframe(motion,{time:1100,target:head.id,values:{rotation:0}});
+ }
+
+ if(motion.keyframes.length===0){
+  throw new Error("Пока не распознана команда. Попробуй один из примеров.");
+ }
+ return motion;
+}
+
+function play(motion){
+ stop();
+ active=true;
+ const start=performance.now();
+
+ function frame(now){
+  if(!active)return;
+  const time=(now-start)%motion.duration;
+  const values=evaluateMotion(motion,time);
+  render(values);
+  animationFrame=requestAnimationFrame(frame);
+ }
+ animationFrame=requestAnimationFrame(frame);
+}
+
+function run(){
+ try{
+  const text=command.value.trim();
+  if(!text)throw new Error("Сначала напиши описание движения.");
+  const motion=createAnimation(text);
+  play(motion);
+  status.textContent="Движение создано: "+motion.name;
+ }catch(error){
+  status.textContent=error.message;
+ }
+}
+
+document.getElementById("run").addEventListener("click",run);
+document.getElementById("stop").addEventListener("click",()=>{
+ stop();
+ render({});
+ status.textContent="Анимация остановлена.";
+});
+
+document.querySelectorAll(".example").forEach(button=>{
+ button.addEventListener("click",()=>{
+  command.value=button.dataset.command;
+  run();
+ });
+});
+</script>
+</body>
+</html>
