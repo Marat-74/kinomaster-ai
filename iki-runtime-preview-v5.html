@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай 2.0 — проверка скелетной структуры Iki v5</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#10141c;color:#edf2f7}
+*{box-sizing:border-box}body{margin:0;padding:15px;max-width:1100px;margin:auto}
+h1{font-size:22px;margin:5px 0 8px}.sub{color:#aab6c5;font-size:14px;line-height:1.5}
+.panel{background:#1a2230;border:1px solid #344154;border-radius:14px;padding:14px;margin:13px 0}
+button,.file{background:#315d91;color:white;border:0;border-radius:10px;padding:11px 13px;font-size:14px;cursor:pointer}
+button:disabled{opacity:.45}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.stage{background:#080b11;border:1px solid #344154;border-radius:14px;min-height:300px;overflow:hidden}
+canvas{display:block;width:100%;height:min(62vh,580px);min-height:300px}
+#status{font-size:13px;color:#aab6c5;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px}
+.item{background:#111925;border-radius:10px;padding:10px;overflow-wrap:anywhere;font-size:13px}
+.item b{display:block;margin-bottom:5px}.muted{color:#9aa8ba}
+.ok{color:#83d6a4}.warn{color:#ffd17c}.err{color:#ff9b9b}
+input[type=range]{width:100%}select{background:#111925;color:#fff;border:1px solid #42516a;border-radius:8px;padding:9px;max-width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px}td,th{text-align:left;padding:7px;border-bottom:1px solid #344154;overflow-wrap:anywhere}
+.scroll{overflow:auto;max-height:360px}#raw{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b111a;padding:10px;border-radius:8px;font:12px/1.45 ui-monospace,monospace}
+</style>
+</head>
+<body>
+<h1>Киномастер-Ай 2.0 — проверка скелетной структуры Iki v5</h1>
+<div class="sub">Диагностический стенд: показывает реальные части модели, параметры, связи, деформеры, физику и готовые движения. Он ничего не меняет в исходном файле персонажа.</div>
+
+<div class="panel">
+<b>1. Загрузить модель</b>
+<div class="actions">
+<button id="sample">Загрузить тестовую девочку</button>
+<label class="file">Выбрать файл .iki<input id="file" type="file" accept=".iki,.json,application/json" hidden></label>
+</div>
+<div id="status">Ожидаю модель.</div>
+</div>
+
+<div class="stage"><canvas id="view"></canvas></div>
+
+<div class="panel">
+<b>2. Общая структура модели</b>
+<div id="summary" class="grid"><div class="item muted">Сначала загрузите модель.</div></div>
+</div>
+
+<div class="panel">
+<b>3. Части персонажа и их связи</b>
+<p class="sub">Показываем составные части и параметры, которые на них воздействуют. Названия частей берутся из самого файла модели.</p>
+<div class="scroll"><table><thead><tr><th>Часть</th><th>Тип / данные</th><th>Связанные параметры</th></tr></thead><tbody id="parts"><tr><td colspan="3">Нет данных</td></tr></tbody></table></div>
+</div>
+
+<div class="panel">
+<b>4. Параметры управления</b>
+<p class="sub">Передвигайте ползунки. Если параметр подключён к деформеру или части, изменение должно быть видно на персонаже.</p>
+<div id="parameters" class="grid"><div class="item muted">Нет данных</div></div>
+</div>
+
+<div class="panel">
+<b>5. Деформеры и физика</b>
+<div id="deformers" class="grid"><div class="item muted">Нет данных</div></div>
+</div>
+
+<div class="panel">
+<b>6. Готовые движения и выражения</b>
+<div id="motions" class="grid"></div>
+<div id="expressions" class="actions"></div>
+<div class="actions"><button id="idle" disabled>Обычное состояние</button><button id="stop" disabled>Остановить</button><button id="reset" disabled>Сбросить параметры</button></div>
+</div>
+
+<div class="panel">
+<b>7. Вывод проверки</b>
+<div id="verdict" class="sub">Ожидаю загрузку модели.</div>
+<details style="margin-top:10px"><summary>Техническая структура JSON (для диагностики)</summary><pre id="raw">Нет данных</pre></details>
+</div>
+
+<div class="sub">Используются Iki Engine 0.13.0 и Iki Format 0.12.0. Требуются интернет, HTTPS и поддержка WebGL2. Результат этой проверки относится только к загруженной модели.</div>
+
+<script type="module">
+const $=id=>document.getElementById(id),canvas=$('view'),status=$('status');
+const sampleUrl='https://raw.githubusercontent.com/zeikar/iki/main/examples/playground/public/bob.iki';
+let player=null,motion=null,model=null,raf=null,defaults=[];
+const paramNames={
+ ParamAngleX:'Поворот головы влево / вправо',ParamAngleY:'Наклон головы вверх / вниз',
+ ParamAngleZ:'Наклон головы в стороны',ParamBodyAngleX:'Поворот корпуса',
+ ParamEyeLOpen:'Левый глаз',ParamEyeROpen:'Правый глаз',
+ ParamEyeBallX:'Движение глаз по горизонтали',ParamEyeBallY:'Движение глаз по вертикали',
+ ParamBrowLY:'Левая бровь',ParamBrowRY:'Правая бровь',
+ ParamMouthOpenY:'Открытие рта',ParamMouthForm:'Форма рта',
+ ParamArmLA:'Левая рука',ParamArmRA:'Правая рука',
+ ParamBreath:'Дыхание',ParamHairFront:'Передние волосы',
+ ParamHairSide:'Боковые волосы',ParamHairBack:'Задние волосы',
+};
+const humanHints=[
+ ['голов','голова'],['head','голова'],['body','корпус'],['torso','корпус'],
+ ['arm','рука'],['hand','кисть'],['leg','нога'],['foot','ступня'],
+ ['wing','крыло'],['tail','хвост'],['eye','глаз'],['mouth','рот']
+];
+function say(t,cls=''){status.className=cls;status.textContent=t}
+function resize(){const d=Math.min(devicePixelRatio||1,2),w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight);canvas.width=Math.round(w*d);canvas.height=Math.round(h*d)}
+if('ResizeObserver'in window)new ResizeObserver(resize).observe(canvas);resize();
+function stopLoop(){if(raf!==null)cancelAnimationFrame(raf);raf=null}
+function ensureLoop(){if(raf!==null||!motion)return;const tick=t=>{if(!motion){raf=null;return}motion.update(t);raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick)}
+function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function countTree(v){if(!v||typeof v!=='object')return 0;let n=1;for(const x of Object.values(v))if(x&&typeof x==='object')n+=countTree(x);return n}
+function describePart(p){
+ const type=p.mesh?'Сетка / mesh':p.texture!==undefined?'Текстура':p.color?'Цветная часть':'Элемент';
+ const bind=(p.bindings||[]).map(b=>b.parameter+' → '+b.channel).join(', ')||'нет прямых связей';
+ return [type,bind];
+}
+function renderSummary(){
+ const parts=model.parts||[],params=model.parameters||[],deformers=model.deformers||[],physics=model.physics||[];
+ const groups=model.motions||{},motionCount=Object.values(groups).reduce((n,a)=>n+(Array.isArray(a)?a.length:0),0);
+ const entries=[
+  ['Имя модели',model.name||'Без названия'],
+  ['Версия формата',model.version??'не указана'],
+  ['Части персонажа',parts.length],
+  ['Параметры управления',params.length],
+  ['Группы движений',Object.keys(groups).length+' / клипов: '+motionCount],
+  ['Выражения лица',(model.expressions||[]).length],
+  ['Деформеры',Array.isArray(deformers)?deformers.length:(deformers&&typeof deformers==='object'?Object.keys(deformers).length:0)],
+  ['Физические настройки',Array.isArray(physics)?physics.length:(physics&&typeof physics==='object'?Object.keys(physics).length:0)],
+  ['Размер холста',model.canvas?model.canvas.width+' × '+model.canvas.height:'не указан']
+ ];
+ $('summary').innerHTML=entries.map(([a,b])=>'<div class="item"><b>'+esc(a)+'</b>'+esc(b)+'</div>').join('');
+}
+function renderParts(){
+ const root=$('parts');root.innerHTML='';
+ (model.parts||[]).forEach((p,i)=>{
+  const [type,bind]=describePart(p),tr=document.createElement('tr');
+  tr.innerHTML='<td>'+esc(p.name||p.id||('Часть '+(i+1)))+'</td><td>'+esc(type)+(p.order!==undefined?' · слой '+esc(p.order):'')+'</td><td>'+esc(bind)+'</td>';
+  root.append(tr);
+ });
+ if(!model.parts?.length)root.innerHTML='<tr><td colspan="3">Части не найдены.</td></tr>';
+}
+function renderParameters(){
+ const root=$('parameters');root.innerHTML='';defaults=[];
+ let live=[];try{live=player.getParameters()||[]}catch(e){}
+ const liveMap=new Map(live.map(p=>[p.id,p]));
+ (model.parameters||[]).forEach(p=>{
+  const liveP=liveMap.get(p.id)||p,box=document.createElement('div');box.className='item';
+  const title=document.createElement('b');title.textContent=paramNames[p.id]||p.id;
+  const id=document.createElement('div');id.className='muted';id.textContent=p.id;
+  const value=document.createElement('div');value.textContent='Значение: '+Number(p.default??0).toFixed(2);
+  const input=document.createElement('input');input.type='range';input.min=p.min??0;input.max=p.max??1;input.step=Math.max(((p.max??1)-(p.min??0))/300,0.001);input.value=p.default??0;
+  defaults.push({id:p.id,value:Number(p.default??0)});
+  input.addEventListener('input',()=>{const n=Number(input.value);player.setParameter(p.id,n);value.textContent='Значение: '+n.toFixed(2)});
+  box.append(title,id,value,input);root.append(box);
+ });
+ if(!(model.parameters||[]).length)root.textContent='В модели нет объявленных параметров.';
+}
+function renderDeformers(){
+ const root=$('deformers');root.innerHTML='';
+ const add=(title,obj)=>{
+  if(!obj||(!Array.isArray(obj)&&typeof obj!=='object'))return;
+  const arr=Array.isArray(obj)?obj:Object.entries(obj).map(([k,v])=>({id:k,...(v&&typeof v==='object'?v:{value:v})}));
+  arr.forEach((d,i)=>{
+   const keys=Object.keys(d||{}),kind=d.type||d.kind||d.constructor?.name||'тип не указан';
+   const label=d.name||d.id||title+' '+(i+1);
+   const box=document.createElement('div');box.className='item';
+   box.innerHTML='<b>'+esc(label)+'</b><div>'+esc(title)+' · '+esc(kind)+'</div><div class="muted">Поля: '+esc(keys.join(', ')||'нет')+'</div>';
+   root.append(box);
+  });
+ };
+ add('Деформер',model.deformers);
+ add('Физика',model.physics);
+ if(!root.children.length)root.textContent='В этой модели отдельные деформеры или физические настройки не объявлены.';
+}
+function renderMotions(){
+ const root=$('motions');root.innerHTML='';
+ const groups=model.motions||{};
+ const ru={Idle:'Обычное состояние',Nod:'Кивок',Shake:'Покачивание головой',Tilt:'Наклон головы',Walk:'Ходьба',Run:'Бег',Jump:'Прыжок',Talk:'Разговор'};
+ let total=0;
+ for(const [g,clips] of Object.entries(groups)){
+  (clips||[]).forEach((clip,i)=>{
+   total++;const box=document.createElement('div');box.className='item';
+   const b=document.createElement('button');b.textContent=(ru[g]||g)+' · '+(i+1);
+   b.addEventListener('click',()=>{ensureLoop();const ok=motion.playMotion(g,i);say(ok?'Запущено движение: '+(ru[g]||g):'Не удалось запустить движение.','')});
+   const p=document.createElement('div');p.className='muted';p.textContent=clip.description||('Группа: '+g+'; длительность: '+(clip.duration??'не указана'));
+   box.append(b,p);root.append(box);
+  });
+ }
+ if(!total)root.textContent='Готовые клипы движений не найдены.';
+ const ex=$('expressions');ex.innerHTML='';
+ (model.expressions||[]).forEach(e=>{
+  const b=document.createElement('button');b.textContent=e.description||e.id;
+  b.addEventListener('click',()=>{ensureLoop();const ok=motion.playExpression(e.id);say(ok?'Включено выражение: '+(e.description||e.id):'Не удалось включить выражение.')});
+  ex.append(b);
+ });
+ if(!ex.children.length)ex.textContent='Нет выражений лица.';
+}
+function renderVerdict(){
+ const p=model.parts||[],pars=model.parameters||[],names=pars.map(x=>x.id);
+ const deform=model.deformers||[],physics=model.physics||[];
+ const hasMesh=p.some(x=>x.mesh),hasBindings=p.some(x=>(x.bindings||[]).length);
+ const angle=names.filter(x=>/Angle|Head|Body/i.test(x));
+ const limb=names.filter(x=>/Arm|Leg|Hand|Foot|Wing|Tail/i.test(x));
+ const lines=[];
+ lines.push('<p><b>Подтверждено в этой модели:</b> '+p.length+' частей, '+pars.length+' параметров, '+(model.expressions||[]).length+' выражений лица.</p>');
+ lines.push('<p><b>Связи параметров с частями:</b> '+(hasBindings?'обнаружены':'не обнаружены в прямых bindings')+'.</p>');
+ lines.push('<p><b>Сетки деформации:</b> '+(hasMesh?'есть mesh-данные':'mesh-данные в частях не обнаружены')+'.</p>');
+ lines.push('<p><b>Параметры поворота головы / корпуса:</b> '+(angle.length?angle.join(', '):'не обнаружены по стандартным именам')+'.</p>');
+ lines.push('<p><b>Параметры конечностей:</b> '+(limb.length?limb.join(', '):'не обнаружены по стандартным именам')+'.</p>');
+ lines.push('<p><b>Деформеры / физика:</b> '+(countTree(deform)>1?'структура деформеров найдена':'отдельная структура деформеров не найдена')+'; '+(countTree(physics)>1?'физические данные найдены':'физические данные не найдены')+'.</p>');
+ lines.push('<p class="warn"><b>Важно:</b> наличие параметров или сетки само по себе ещё не доказывает, что персонаж умеет полноценно ходить, поднимать руку или поворачиваться в профиль. Это нужно проверять на модели с соответствующими частями, деформерами и движениями.</p>');
+ $('verdict').innerHTML=lines.join('');
+}
+async function loadJson(json,label){
+ say('Подключаем Iki и проверяем файл…');
+ try{
+  const [{IkiPlayer,IkiMotion},{loadIkiModel}]=await Promise.all([
+   import('https://esm.sh/@ikijs/engine@0.13.0?bundle'),
+   import('https://esm.sh/@ikijs/format@0.12.0?bundle')
+  ]);
+  const raw=JSON.parse(json);
+  const parsed=loadIkiModel(json);
+  const next=new IkiPlayer(canvas);
+  const result=await next.load(parsed);
+  if(result?.superseded){next.destroy();throw new Error('Загрузка была прервана другой операцией.')}
+  stopLoop();if(player)player.destroy();
+  player=next;model=parsed;motion=new IkiMotion(model,id=>player.getParameter(id),(id,v)=>player.setParameter(id,v));
+  player.start();renderSummary();renderParts();renderParameters();renderDeformers();renderMotions();renderVerdict();
+  $('raw').textContent=JSON.stringify(raw,null,2);
+  $('idle').disabled=false;$('stop').disabled=false;$('reset').disabled=false;
+  say('Модель загружена: '+label+'. Данные структуры прочитаны.','ok');
+ }catch(e){say('Ошибка: '+(e.message||String(e)),'err');$('verdict').textContent='Проверка не завершена. Сообщение: '+(e.message||e)}
+}
+$('sample').addEventListener('click',async()=>{
+ try{say('Загружаем тестовую модель…');const r=await fetch(sampleUrl,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);await loadJson(await r.text(),'bob.iki')}
+ catch(e){say('Не удалось загрузить тестовую модель: '+e.message,'err')}
+});
+$('file').addEventListener('change',async e=>{const f=e.target.files?.[0];if(f)await loadJson(await f.text(),f.name);e.target.value=''});
+$('idle').addEventListener('click',ensureLoop);$('stop').addEventListener('click',stopLoop);
+$('reset').addEventListener('click',()=>{if(!player)return;stopLoop();motion?.stopExpression?.();defaults.forEach(p=>player.setParameter(p.id,p.value));renderParameters();say('Параметры возвращены к исходным значениям.')});
+</script>
+</body>
+</html>
