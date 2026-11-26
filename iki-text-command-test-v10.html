@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай 2.0 — текстовое управление Iki v10</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#10141c;color:#edf2f7}
+*{box-sizing:border-box}body{margin:0;padding:14px;max-width:1000px;margin:auto}
+h1{font-size:22px;margin:5px 0 8px}.muted{color:#aab6c5;line-height:1.5}
+.panel{background:#1a2230;border:1px solid #344154;border-radius:14px;padding:14px;margin:13px 0}
+button,.file{background:#315d91;color:white;border:0;border-radius:10px;padding:11px 13px;font-size:14px;cursor:pointer}
+button:disabled{opacity:.45}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+input[type=file]{max-width:100%}input[type=text]{width:100%;padding:13px;border-radius:9px;border:1px solid #53647b;background:#0e1520;color:white;font-size:16px}
+canvas{display:block;width:100%;height:340px;background:#080b11;border:1px solid #344154;border-radius:12px}
+.item{background:#111a27;border:1px solid #344154;border-radius:10px;padding:10px;margin:8px 0}
+.status{padding:10px;border-radius:9px;background:#111a27;line-height:1.5;white-space:pre-wrap}
+.good{color:#80e0ae}.warn{color:#ffd27a}.bad{color:#ff9d9d}
+small{color:#aab6c5}.param{display:grid;grid-template-columns:1fr auto;gap:5px;align-items:center}
+.param input{grid-column:1/-1;width:100%}
+</style>
+</head>
+<body>
+<h1>Киномастер-Ай 2.0 — проверка текстового управления v10</h1>
+<div class="muted">Эксперимент: русская команда → поиск подходящих параметров модели → изменение позы. Это диагностический стенд, а не готовая система анимации.</div>
+
+<div class="panel">
+  <b>1. Загрузить тестовую модель</b>
+  <div class="row"><button id="sample">Загрузить девочку Iki</button><label class="file">Открыть свой .iki<input id="file" type="file" accept=".iki,.json,application/json" hidden></label></div>
+  <div id="status" class="status">Ожидаю загрузку модели.</div>
+</div>
+
+<div class="panel">
+  <b>2. Персонаж</b>
+  <canvas id="view"></canvas>
+  <div class="row"><button id="reset" disabled>Вернуть исходную позу</button><button id="stop" disabled>Остановить переход</button></div>
+</div>
+
+<div class="panel">
+  <b>3. Опиши действие обычными словами</b>
+  <p class="muted">Примеры: «Поверни голову влево», «Наклони голову вправо», «Подними взгляд», «Закрой глаза», «Удивись». Можно вводить и более сложные фразы — стенд проверит, какие части команды найдёт.</p>
+  <input id="command" type="text" value="Поверни голову влево" placeholder="Например: Петрович поворачивает голову вправо">
+  <div class="row"><button id="run" disabled>Выполнить команду</button></div>
+  <div id="result" class="status">Сначала загрузи модель.</div>
+</div>
+
+<div class="panel">
+  <b>4. Какие параметры реально есть у этой модели</b>
+  <p class="muted">Здесь показаны настоящие параметры, полученные из файла .iki. Ползунки — только для проверки возможностей модели.</p>
+  <div id="params" class="muted">Нет данных.</div>
+</div>
+
+<div class="panel">
+  <b>5. Вывод проверки</b>
+  <div id="verdict" class="status">Проверка ещё не проводилась.</div>
+</div>
+
+<div class="muted">Iki Engine 0.13.0 · Iki Format 0.12.0 · Нужны интернет, HTTPS и поддержка WebGL2.</div>
+
+<script type="module">
+const $=id=>document.getElementById(id);
+const canvas=$('view');
+const sampleUrl='https://raw.githubusercontent.com/zeikar/iki/main/examples/playground/public/bob.iki';
+let player=null,model=null,defaults=[],raf=null,transition=null;
+
+function say(id,msg,cls=''){const el=$(id);el.className='status '+cls;el.textContent=msg}
+function norm(s){return String(s??'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[_-]+/g,' ').replace(/[^\p{L}\p{N} ]/gu,' ').replace(/\s+/g,' ').trim()}
+function fields(p){return norm([p.id,p.name,p.description,p.type].filter(Boolean).join(' '))}
+function findParam(patterns){
+  const list=model?.parameters||[];
+  for(const pattern of patterns){
+    const re=new RegExp(pattern,'i');
+    const found=list.find(p=>re.test(fields(p)));
+    if(found)return found;
+  }
+  return null;
+}
+function target(p,side){
+  const min=Number(p.min??-1),max=Number(p.max??1),def=Number(p.default??0);
+  if(side==='min')return min;
+  if(side==='max')return max;
+  if(side==='center')return (min+max)/2;
+  return def;
+}
+function setNow(id,value){player.setParameter(id,value)}
+function stopTransition(){if(raf!==null)cancelAnimationFrame(raf);raf=null;transition=null}
+function animate(changes){
+  stopTransition();
+  const start=performance.now(),duration=650;
+  const from=changes.map(c=>({id:c.p.id,a:Number(player.getParameter(c.p.id)??c.from),b:c.to}));
+  function tick(now){
+    const t=Math.min(1,(now-start)/duration),e=t*t*(3-2*t);
+    from.forEach(x=>setNow(x.id,x.a+(x.b-x.a)*e));
+    if(t<1)raf=requestAnimationFrame(tick);else raf=null;
+  }
+  raf=requestAnimationFrame(tick);
+}
+function addAction(found,label,side,explain){
+  if(!found)return {ok:false,label,why:'В модели не найден соответствующий параметр.'};
+  return {ok:true,label,p:found,to:target(found,side),why:explain};
+}
+function parseCommand(text){
+  const t=norm(text),actions=[];
+  const head=findParam(['head.*angle','angle.*head','head.*rotation','rotation.*head','angle x']);
+  const tilt=findParam(['angle z','head.*tilt','tilt.*head','roll']);
+  const gazeX=findParam(['gaze x','eye.*look.*x','look.*x']);
+  const gazeY=findParam(['gaze y','eye.*look.*y','look.*y']);
+  const eyeL=findParam(['eye l','left eye','eye.*left']);
+  const eyeR=findParam(['eye r','right eye','eye.*right']);
+  const mouth=findParam(['mouth','lip','jaw']);
+  const expression=findParam(['expression','face']);
+
+  if(/голов|поверни|разверни/.test(t)){
+    if(/влево|налево|левую сторону/.test(t))actions.push(addAction(head,'Поворот головы влево','min','Проверен параметр угла головы.'));
+    else if(/вправо|направо|правую сторону/.test(t))actions.push(addAction(head,'Поворот головы вправо','max','Проверен параметр угла головы.'));
+    else if(/прямо|в центр|ровно/.test(t))actions.push(addAction(head,'Голова прямо','center',''));
+  }
+  if(/наклон/.test(t)){
+    const side=/влево|налево/.test(t)?'min':/вправо|направо/.test(t)?'max':'center';
+    actions.push(addAction(tilt,'Наклон головы',side,'Проверен параметр наклона.'));
+  }
+  if(/взгляд|смотр|глаз/.test(t)){
+    if(/вверх|подними/.test(t))actions.push(addAction(gazeY,'Взгляд вверх','max','Проверено управление взглядом по вертикали.'));
+    if(/вниз|опусти/.test(t))actions.push(addAction(gazeY,'Взгляд вниз','min','Проверено управление взглядом по вертикали.'));
+    if(/влево|налево/.test(t))actions.push(addAction(gazeX,'Взгляд влево','min','Проверено управление взглядом по горизонтали.'));
+    if(/вправо|направо/.test(t))actions.push(addAction(gazeX,'Взгляд вправо','max','Проверено управление взглядом по горизонтали.'));
+  }
+  if(/закрой глаза|зажмур|морг/.test(t)){
+    const both=[eyeL,eyeR].filter(Boolean);
+    if(both.length)both.forEach((p,i)=>actions.push(addAction(p,i?'Правый глаз':'Левый глаз','min','Проверено изменение параметра глаза.')));
+    else actions.push({ok:false,label:'Закрыть глаза',why:'Не найдены параметры открытия/закрытия глаз.'});
+  }
+  if(/улыб|смеш|удив|серд|груст|зл|эмоц/.test(t)){
+    if(expression)actions.push(addAction(expression,'Выражение лица','max','Найден параметр выражения лица.'));
+    else if(mouth)actions.push(addAction(mouth,'Изменение рта','max','Найден параметр рта.'));
+    else actions.push({ok:false,label:'Выражение лица',why:'В этой модели не найден универсальный параметр эмоции или рта. Возможно, эмоции доступны отдельными готовыми выражениями.'});
+  }
+  if(/рук|кист|локт|плеч|ног|ступ|колен|прыг|бег|ход/.test(t)){
+    const limb=model.parameters.filter(p=>/arm|hand|elbow|shoulder|leg|foot|knee|walk|run|jump|рук|ног/i.test(fields(p)));
+    actions.push(limb.length?addAction(limb[0],'Движение конечности','max','Найден параметр конечности.'): {ok:false,label:'Движение конечности',why:'В этой тестовой модели нет подходящего параметра рук или ног. Нельзя считать, что конечность уже подготовлена к анимации.'});
+  }
+  return actions;
+}
+function renderParams(){
+ const root=$('params');root.innerHTML='';defaults=[];
+ (model.parameters||[]).forEach(p=>{
+  const box=document.createElement('div');box.className='item param';
+  const name=document.createElement('b');name.textContent=p.name||p.id||'Параметр';
+  const id=document.createElement('small');id.textContent='ID: '+(p.id||'—')+' · диапазон '+(p.min??0)+'…'+(p.max??1);
+  const value=document.createElement('small');value.textContent='Значение: '+Number(p.default??0).toFixed(2);
+  const input=document.createElement('input');input.type='range';input.min=p.min??-1;input.max=p.max??1;input.step=Math.max(((Number(p.max??1)-Number(p.min??-1))/300),.001);input.value=p.default??0;
+  defaults.push({id:p.id,value:Number(p.default??0)});
+  input.addEventListener('input',()=>{stopTransition();player.setParameter(p.id,Number(input.value));value.textContent='Значение: '+Number(input.value).toFixed(2)});
+  box.append(name,id,value,input);root.append(box);
+ });
+ if(!root.children.length)root.textContent='Модель не объявляет параметры управления.';
+}
+async function loadJson(json,label){
+ try{
+  say('status','Подключаем Iki и загружаем модель…');
+  const [{IkiPlayer},{loadIkiModel}]=await Promise.all([
+   import('https://esm.sh/@ikijs/engine@0.13.0?bundle'),
+   import('https://esm.sh/@ikijs/format@0.12.0?bundle')
+  ]);
+  const parsed=loadIkiModel(json),next=new IkiPlayer(canvas),result=await next.load(parsed);
+  if(result?.superseded){next.destroy();throw new Error('Загрузка была прервана.')}
+  stopTransition();if(player)player.destroy();player=next;model=parsed;defaults=[];
+  player.start();renderParams();
+  $('run').disabled=false;$('reset').disabled=false;$('stop').disabled=false;
+  say('status','Модель загружена: '+label+'. Найдено параметров: '+(model.parameters||[]).length,'good');
+  say('verdict','Модель готова к проверке. Наличие параметров ещё не доказывает полноценную анимацию тела. Выполни несколько русских команд и посмотри, что реально изменится.');
+  say('result','Введи команду и нажми «Выполнить команду».');
+ }catch(e){say('status','Ошибка загрузки: '+(e.message||String(e)),'bad')}
+}
+$('sample').addEventListener('click',async()=>{
+ try{const r=await fetch(sampleUrl,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);await loadJson(await r.text(),'bob.iki')}
+ catch(e){say('status','Не удалось загрузить тестовую модель: '+e.message,'bad')}
+});
+$('file').addEventListener('change',async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ try{await loadJson(await f.text(),f.name)}catch(err){say('status','Не удалось прочитать файл: '+err.message,'bad')}
+});
+$('run').addEventListener('click',()=>{
+ if(!model||!player)return;
+ const actions=parseCommand($('command').value);
+ if(!actions.length){say('result','Не удалось распознать действие. Попробуй описать поворот головы, взгляд, глаза, эмоцию или движение конечности.','warn');return}
+ const good=actions.filter(x=>x.ok),bad=actions.filter(x=>!x.ok);
+ if(good.length)animate(good);
+ const lines=[...good.map(x=>'✓ '+x.label+' — найден параметр «'+(x.p.name||x.p.id)+'» ('+x.p.id+').'),...bad.map(x=>'✕ '+x.label+' — '+x.why)];
+ say('result',lines.join('\n'),bad.length?'warn':'good');
+ const limb=bad.some(x=>/конечност/i.test(x.label));
+ say('verdict',good.length?'Команда сопоставлена с '+good.length+' параметром(ами). Это демонстрирует управление параметрами модели, но не генерацию полноценной новой скелетной анимации.':'Эта команда не нашла подходящих параметров в загруженной модели.',limb?'warn':'');
+});
+$('reset').addEventListener('click',()=>{
+ if(!player)return;stopTransition();defaults.forEach(p=>player.setParameter(p.id,p.value));
+ document.querySelectorAll('#params input[type=range]').forEach((el,i)=>el.value=defaults[i]?.value??0);
+ say('result','Исходные значения параметров восстановлены.','good');
+});
+$('stop').addEventListener('click',()=>{stopTransition();say('result','Переход остановлен.','warn')});
+</script>
+</body>
+</html>
