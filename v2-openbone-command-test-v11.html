@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Киномастер-Ай 2.0 — OpenBone тест v11</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10151e;color:#edf2f7}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;max-width:980px;margin-inline:auto}
+h1{font-size:23px;margin:4px 0 7px}
+p{line-height:1.45}
+.muted{color:#a9b5c5;font-size:13px}
+.panel{background:#192332;border:1px solid #304158;border-radius:15px;padding:14px;margin:12px 0}
+#status{padding:10px 12px;border-radius:10px;background:#263346;color:#dbeafe;font-size:14px}
+#stage{background:#0b1119;border:1px solid #34445b;border-radius:14px;overflow:hidden;min-height:260px}
+openbone-player{display:block;width:100%;height:min(66vw,520px);min-height:280px;max-height:520px}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+button{border:1px solid #526780;background:#26374c;color:#fff;border-radius:11px;padding:12px 10px;font-size:15px;font-weight:600;min-height:46px}
+button:active{transform:scale(.98);background:#38516e}
+input{width:100%;background:#0e1723;border:1px solid #526780;border-radius:11px;color:#fff;padding:13px;font-size:16px;margin:6px 0 9px}
+.command-row{display:grid;grid-template-columns:1fr auto;gap:8px}
+.command-row button{min-width:100px}
+#log{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c131d;border-radius:10px;padding:10px;min-height:52px;font-size:13px;color:#c4d2e2}
+.tag{display:inline-block;border:1px solid #4a607b;border-radius:999px;padding:3px 8px;font-size:12px;color:#c8d7e9;margin:3px 4px 3px 0}
+@media(max-width:480px){body{padding:12px}.controls{grid-template-columns:1fr 1fr}openbone-player{height:330px;min-height:260px}}
+</style>
+</head>
+<body>
+<h1>Киномастер-Ай 2.0 — новый движок анимации</h1>
+<p class="muted">Тест v11 · OpenBone Player 0.4.13 · отдельная экспериментальная страница. Основные файлы проекта не затрагиваются.</p>
+
+<div class="panel">
+  <div id="status">Подготовка загрузки движка…</div>
+  <p class="muted">Загружается демонстрационный персонаж из открытого проекта OpenBone. У него уже есть скелет, 22 кости, анимации ходьбы, атаки и приветствия, а также звуковые эффекты.</p>
+  <div id="stage">
+    <openbone-player id="player" state-machine="knight" renderer="canvas" scripts="none" fit="contain" background="#9fd0f5"></openbone-player>
+  </div>
+  <div class="controls">
+    <button id="idle">Стоять</button>
+    <button id="walk">Идти</button>
+    <button id="salute">Приветствовать</button>
+    <button id="attack">Атаковать</button>
+  </div>
+</div>
+
+<div class="panel">
+  <strong>Проверка управления обычным текстом</strong>
+  <p class="muted">Напиши команду по-русски. Сейчас это небольшой тестовый словарь, а не полноценное понимание свободного сценария.</p>
+  <div class="command-row">
+    <input id="command" value="Рыцарь идёт" aria-label="Команда персонажу">
+    <button id="send">Выполнить</button>
+  </div>
+  <span class="tag">«Рыцарь идёт»</span>
+  <span class="tag">«Остановись»</span>
+  <span class="tag">«Поздоровайся»</span>
+  <span class="tag">«Атакуй»</span>
+  <div id="log">Команда ещё не отправлялась.</div>
+</div>
+
+<div class="panel">
+  <strong>Что именно проверяем</strong>
+  <ul class="muted">
+    <li>Загружается ли внешний скелетный 2D-движок в нашей GitHub Pages.</li>
+    <li>Воспроизводятся ли настоящие движения частей тела, а не только изменение чисел.</li>
+    <li>Работают ли переходы между ходьбой, ожиданием, приветствием и атакой.</li>
+    <li>Может ли русский текст управлять реальным персонажем через командный слой.</li>
+  </ul>
+  <p class="muted">Важно: этот тестовый рыцарь не Петрович. Успешный тест подтвердит работу движка и командного управления, но не докажет, что наш собственный рисунок уже автоматически разобран на части.</p>
+</div>
+
+<script type="module">
+const MODEL_URL = "https://raw.githubusercontent.com/UXCentury/open-bone/main/examples/knight.obone";
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+const player = document.getElementById("player");
+const commandInput = document.getElementById("command");
+
+function status(message, ok=false) {
+  statusEl.textContent = message;
+  statusEl.style.background = ok ? "#173b32" : "#263346";
+  statusEl.style.color = ok ? "#b9f6d5" : "#dbeafe";
+}
+function log(message) { logEl.textContent = message; }
+
+let loaded = false;
+player.addEventListener("openbone-load", () => {
+  loaded = true;
+  status("Движок загружен. Персонаж готов к командам.", true);
+  log("Персонаж загружен. Попробуй: «Рыцарь идёт», «Остановись», «Поздоровайся» или «Атакуй».");
+});
+player.addEventListener("error", (e) => {
+  status("Ошибка загрузки персонажа. Подробности — ниже.");
+  log(String(e?.detail?.message || e?.message || e));
+});
+
+async function boot() {
+  try {
+    status("Загружаем OpenBone Player 0.4.13…");
+    const mod = await import("https://esm.sh/@openbone/player@0.4.13?bundle");
+    mod.definePlayerElement();
+    player.setAttribute("src", MODEL_URL);
+    status("Движок подключён. Загружаем модель рыцаря…");
+  } catch (err) {
+    status("Не удалось подключить OpenBone Player.");
+    log((err && (err.stack || err.message)) ? (err.stack || err.message) : String(err));
+  }
+}
+
+function execute(text) {
+  const s = String(text || "").toLowerCase().replace(/ё/g,"е").trim();
+  if (!loaded) {
+    log("Персонаж ещё загружается. Подожди, пока появится сообщение «Персонаж готов».");
+    return;
+  }
+  if (/(ид(и|ет|ти)|шага|пошел|пошла|пройд)/.test(s)) {
+    player.setInput("walk", true);
+    log("Распознано действие: ХОДЬБА → включён параметр walk.");
+  } else if (/(стой|останов|перестань идти|не иди|прекрати)/.test(s)) {
+    player.setInput("walk", false);
+    log("Распознано действие: ОСТАНОВКА → выключён параметр walk.");
+  } else if (/(поздоров|привет|салют|отдай честь|помаш)/.test(s)) {
+    player.setInput("walk", false);
+    player.fire("salute");
+    log("Распознано действие: ПРИВЕТСТВИЕ → запущена анимация salute.");
+  } else if (/(атак|удар|бей|напад)/.test(s)) {
+    player.setInput("walk", false);
+    player.fire("attack");
+    log("Распознано действие: АТАКА → запущена анимация attack.");
+  } else {
+    log("Пока не знаю эту команду. Для теста используй ходьбу, остановку, приветствие или атаку.");
+  }
+}
+document.getElementById("idle").addEventListener("click", () => execute("остановись"));
+document.getElementById("walk").addEventListener("click", () => execute("иди"));
+document.getElementById("salute").addEventListener("click", () => execute("поздоровайся"));
+document.getElementById("attack").addEventListener("click", () => execute("атакуй"));
+document.getElementById("send").addEventListener("click", () => execute(commandInput.value));
+commandInput.addEventListener("keydown", e => { if (e.key === "Enter") execute(commandInput.value); });
+boot();
+</script>
+</body>
+</html>
