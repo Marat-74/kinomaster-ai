@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Киномастер-Ай 2.0 — OpenBone тест v13</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#10151e;color:#edf2f7}*{box-sizing:border-box}body{margin:0;padding:15px;max-width:980px;margin-inline:auto}h1{font-size:22px;margin:4px 0 7px}p{line-height:1.45}.muted{color:#a9b5c5;font-size:13px}.panel{background:#192332;border:1px solid #304158;border-radius:15px;padding:14px;margin:12px 0}#status{padding:12px;border-radius:10px;background:#263346;color:#dbeafe;font-size:14px}#stage{background:#0b1119;border:1px solid #34445b;border-radius:14px;overflow:hidden;min-height:260px}openbone-player{display:block;width:100%;height:min(66vw,520px);min-height:280px;max-height:520px}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}button{border:1px solid #526780;background:#26374c;color:#fff;border-radius:11px;padding:12px 10px;font-size:15px;font-weight:600;min-height:46px}button:disabled{opacity:.45}input{width:100%;background:#0e1723;border:1px solid #526780;border-radius:11px;color:#fff;padding:13px;font-size:16px;margin:6px 0 9px}.command-row{display:grid;grid-template-columns:1fr auto;gap:8px}#log{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c131d;border-radius:10px;padding:10px;min-height:66px;font-size:13px;color:#c4d2e2}.tag{display:inline-block;border:1px solid #4a607b;border-radius:999px;padding:3px 8px;font-size:12px;color:#c8d7e9;margin:3px 4px 3px 0}.hidden{display:none}@media(max-width:480px){body{padding:12px}.controls{grid-template-columns:1fr 1fr}openbone-player{height:330px;min-height:260px}}
+</style></head><body>
+<h1>Киномастер-Ай 2.0 — проверка OpenBone</h1>
+<p class="muted">Тест v13 · поэтапная загрузка персонажа и скрипта окружения. v12 сохранена отдельно.</p>
+<div class="panel">
+<div id="status">Этап 1 из 3: подключаем движок…</div>
+<p class="muted">Сначала загружаем рыцаря без дополнительного скрипта. После успешной загрузки отдельно проверим QuickJS и прокрутку фона.</p>
+<div id="stage"><openbone-player id="player" state-machine="knight" renderer="canvas" scripts="none" fit="contain" background="#9fd0f5"></openbone-player></div>
+<div class="controls">
+<button id="idle" disabled>Стоять</button><button id="walk" disabled>Идти</button>
+<button id="salute" disabled>Приветствовать</button><button id="attack" disabled>Атаковать</button>
+</div>
+<div style="margin-top:10px"><button id="scripts" disabled style="width:100%">Этап 2: проверить скрипт фона</button></div>
+</div>
+<div class="panel"><strong>Команда обычным текстом</strong>
+<p class="muted">Например: «Иди, потом атакуй, потом остановись».</p>
+<div class="command-row"><input id="command" value="Иди, потом атакуй, потом остановись" aria-label="Команда персонажу"><button id="send" disabled>Выполнить</button></div>
+<span class="tag">Иди</span><span class="tag">Атакуй</span><span class="tag">Поздоровайся</span><span class="tag">Смейся</span><span class="tag">Остановись</span>
+<div id="log">Жду загрузки персонажа.</div></div>
+<div class="panel"><strong>Диагностика</strong><div id="diag" class="muted">Этапы загрузки будут отмечаться здесь.</div></div>
+<script type="module">
+const MODEL_URL="https://raw.githubusercontent.com/UXCentury/open-bone/main/examples/knight.obone";
+const player=document.getElementById('player'), statusEl=document.getElementById('status'), logEl=document.getElementById('log'), diagEl=document.getElementById('diag');
+const scriptsBtn=document.getElementById('scripts');let loaded=false, scriptsEnabled=false, busy=false, runToken=0, timer=null;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function status(s,ok=false){statusEl.textContent=s;statusEl.style.background=ok?'#173b32':'#263346';statusEl.style.color=ok?'#b9f6d5':'#dbeafe'}
+function diag(s){diagEl.textContent=s}
+function log(s){logEl.textContent=s}
+function armTimeout(label){clearTimeout(timer);timer=setTimeout(()=>{if(!loaded){status('Загрузка задержалась: '+label+'. Модель ещё не сообщила о готовности.');diag('Тайм-аут ожидания: '+label+'. Проверь интернет/перезагрузи страницу один раз.');}},30000)}
+player.addEventListener('openbone-load',()=>{
+ clearTimeout(timer);loaded=true;busy=false;
+ if(!scriptsEnabled){status('Этап 1 завершён: рыцарь загружен без скрипта. Можно проверить движения.',true);diag('Персонаж, изображения и базовая анимация загружены. Скрипт фона пока выключен.');scriptsBtn.disabled=false;scriptsBtn.textContent='Этап 2: включить скрипт фона и перезагрузить модель';}
+ else{status('Этап 2 завершён: модель и скрипт окружения загружены.',true);diag('QuickJS и скрипт модели загрузились. Теперь проверь ходьбу и движение дороги/фона.');scriptsBtn.disabled=false;scriptsBtn.textContent='Скрипт фона включён';}
+ ['idle','walk','salute','attack','send'].forEach(id=>document.getElementById(id).disabled=false);
+ log('Готово. Проверь кнопки. Затем отдельно включи скрипт фона.');
+});
+for(const ev of ['error','openbone-error'])player.addEventListener(ev,e=>{clearTimeout(timer);status('Сообщение об ошибке при загрузке.');diag((e.detail?.message||e.message||String(e.detail||ev)));});
+window.addEventListener('unhandledrejection',e=>{diag('Ошибка модуля/загрузки: '+(e.reason?.stack||e.reason?.message||String(e.reason)));});
+async function boot(){try{status('Этап 1 из 3: подключаем OpenBone Player…');armTimeout('подключение движка');const mod=await import('https://esm.sh/@openbone/player@0.4.13?bundle');mod.definePlayerElement();diag('Модуль OpenBone подключён. Запрашиваем файл рыцаря…');player.setAttribute('src',MODEL_URL);status('Этап 1 из 3: загружаем рыцаря и изображения (скрипт выключен)…');armTimeout('загрузка персонажа и изображений');}catch(e){clearTimeout(timer);status('Не удалось подключить движок.');diag(e?.stack||e?.message||String(e));}}
+function parseCommands(raw){const s=String(raw||'').toLowerCase().replace(/ё/g,'е');const defs=[
+['walk',/(?:^|[^\p{L}\p{N}_])(иди|идти|идет|шага[йть]*|пошел|пошла|пойди|двигайся|пройд[иет]*)(?=$|[^\p{L}\p{N}_])/gu],
+['salute',/(?:^|[^\p{L}\p{N}_])(поздоровайся|поприветствуй|приветствуй|отдай\s+честь|салютуй|помаши)(?=$|[^\p{L}\p{N}_])/gu],
+['attack',/(?:^|[^\p{L}\p{N}_])(атакуй|атаковать|атакует|ударь|ударить|бей|нападай|напасть)(?=$|[^\p{L}\p{N}_])/gu],
+['laugh',/(?:^|[^\p{L}\p{N}_])(смейся|смеяться|посмейся|рассмеяться|хохочи|хохотать)(?=$|[^\p{L}\p{N}_])/gu],
+['stop',/(?:^|[^\p{L}\p{N}_])(стой|остановись|остановить|останови|прекрати|перестань)(?=$|[^\p{L}\p{N}_])/gu]];const out=[];for(const [type,re] of defs){re.lastIndex=0;let m;while((m=re.exec(s))!==null)out.push({type,index:m.index});}out.sort((a,b)=>a.index-b.index);return out.filter((x,i)=>i===0||x.type!==out[i-1].type)}
+async function execute(raw){if(!loaded){log('Персонаж ещё загружается.');return;}const actions=parseCommands(raw);if(!actions.length){log('Не распознал действие. Пример: «Иди, атакуй, остановись».');return;}const token=++runToken,names={walk:'ИДТИ',salute:'ПРИВЕТСТВИЕ',attack:'АТАКА',laugh:'СМЕХ',stop:'ОСТАНОВКА'},lines=['Распознано: '+actions.map(a=>names[a.type]).join(' → ')];log(lines.join('\n'));for(const a of actions){if(token!==runToken)return;if(a.type==='walk'){player.setInput('walk',true);lines.push('Выполняется: идти');await wait(1800);}else if(a.type==='stop'){player.setInput('walk',false);lines.push('Выполняется: остановиться');await wait(500);}else if(a.type==='salute'){player.setInput('walk',false);player.fire('salute');lines.push('Выполняется: приветствие');await wait(1900);}else if(a.type==='attack'){player.setInput('walk',false);player.fire('attack');lines.push('Выполняется: атака');await wait(1100);}else{lines.push('Смех распознан, но в модели нет клипа смеха.');await wait(300);}log(lines.join('\n'));}if(token===runToken){lines.push('Последовательность завершена.');log(lines.join('\n'));}}
+function single(type){execute({walk:'иди',stop:'остановись',salute:'поздоровайся',attack:'атакуй'}[type]);}
+for(const [id,type] of [['idle','stop'],['walk','walk'],['salute','salute'],['attack','attack']])document.getElementById(id).addEventListener('click',()=>single(type));
+document.getElementById('send').addEventListener('click',()=>execute(document.getElementById('command').value));document.getElementById('command').addEventListener('keydown',e=>{if(e.key==='Enter')execute(e.target.value)});
+scriptsBtn.addEventListener('click',()=>{if(!loaded||busy||scriptsEnabled)return;busy=true;loaded=false;scriptsEnabled=true;['idle','walk','salute','attack','send'].forEach(id=>document.getElementById(id).disabled=true);scriptsBtn.disabled=true;status('Этап 2 из 3: включаем QuickJS. Модель перезагрузится…');diag('Переключаем scripts=quickjs. OpenBone перезагружает документ при изменении атрибута.');armTimeout('загрузка QuickJS и скрипта окружения');player.setAttribute('scripts','quickjs');});
+boot();
+</script></body></html>
