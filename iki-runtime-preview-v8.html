@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Киномастер-Ай 2.0 — обозреватель модели Iki v8</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#10141c;color:#edf2f7}
+*{box-sizing:border-box}body{margin:0;padding:15px;max-width:1100px;margin:auto}
+h1{font-size:22px;margin:5px 0 8px}.sub{color:#aab6c5;font-size:14px;line-height:1.5}
+.panel{background:#1a2230;border:1px solid #344154;border-radius:14px;padding:14px;margin:13px 0}
+button,.file{background:#315d91;color:white;border:0;border-radius:10px;padding:11px 13px;font-size:14px;cursor:pointer}
+button:disabled{opacity:.45}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.stage{background:#080b11;border:1px solid #344154;border-radius:14px;min-height:300px;overflow:hidden}
+canvas{display:block;width:100%;height:min(62vh,580px);min-height:300px}
+#status{font-size:13px;color:#aab6c5;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px}
+.item{background:#111925;border-radius:10px;padding:10px;overflow-wrap:anywhere;font-size:13px}
+.item b{display:block;margin-bottom:5px}.muted{color:#9aa8ba}
+.ok{color:#83d6a4}.warn{color:#ffd17c}.err{color:#ff9b9b}
+input[type=range]{width:100%}select{background:#111925;color:#fff;border:1px solid #42516a;border-radius:8px;padding:9px;max-width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px}td,th{text-align:left;padding:7px;border-bottom:1px solid #344154;overflow-wrap:anywhere}
+.scroll{overflow:auto;max-height:360px}#raw{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b111a;padding:10px;border-radius:8px;font:12px/1.45 ui-monospace,monospace}
+.summary-card{display:block;width:100%;min-height:0;padding:0;overflow:hidden;border:1px solid #40516a;background:#111925;text-align:left;border-radius:10px}
+.summary-card>summary{list-style:none;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.summary-card>summary::-webkit-details-marker,.nested-entry>summary::-webkit-details-marker{display:none}
+.summary-card>summary:after{content:'＋';font-size:19px;color:#9fc8f5}
+.summary-card[open]>summary:after{content:'−'}
+.summary-card .num{font-size:18px;font-weight:700;white-space:nowrap}
+.nested-list{padding:0 10px 10px;display:grid;gap:7px}
+.nested-entry{background:#1b2a3d;border:1px solid #344b66;border-radius:9px;overflow:hidden}
+.nested-entry>summary{padding:10px;cursor:pointer;font-size:13px;font-weight:650;list-style:none}
+.nested-entry>summary:before{content:'▸ ';color:#9fc8f5}
+.nested-entry[open]>summary:before{content:'▾ '}
+.nested-content{padding:0 10px 9px;color:#c7d2df;font-size:12px;overflow-wrap:anywhere}
+.field-line{padding:6px 0;border-top:1px solid #344154;line-height:1.45}
+.field-name{color:#9fc8f5;font-weight:650}
+.nested-entry.depth-2{background:#111d2b;margin-top:6px}
+.empty-note{padding:9px;color:#9aa8ba;font-size:12px}
+.idtag{color:#8194ad;font:11px ui-monospace,monospace;overflow-wrap:anywhere}
+.legend{font-size:11px;color:#9aa8ba;margin-top:3px}
+</style>
+</head>
+<body>
+<h1>Киномастер-Ай 2.0 — обозреватель модели Iki v8</h1>
+<div class="sub">Полностью русские подписи, названия разделов, описания свойств и элементы управления. Технические идентификаторы Iki сохраняются рядом в исходном виде. Сам файл модели не изменяется.</div>
+
+<div class="panel"><b>1. Загрузка модели</b><div class="actions">
+<button id="sample">Загрузить тестовую модель</button>
+<label class="file">Выбрать файл .iki<input id="file" type="file" accept=".iki,.json,application/json" hidden></label>
+</div><div id="status">Ожидаю загрузку модели.</div></div>
+
+<div class="stage"><canvas id="view"></canvas></div>
+
+<div class="panel"><b>2. Общая структура модели</b>
+<p class="sub">Откройте карточку, затем нужную часть или параметр. Подробности раскрываются внутри выбранной карточки.</p>
+<div id="summary" class="grid"><div class="item muted">Сначала загрузите модель.</div></div></div>
+
+<div class="panel"><b>3. Части персонажа и связи</b>
+<p class="sub">Список частей, их типы, порядок отрисовки и связанные параметры.</p>
+<div class="scroll"><table><thead><tr><th>Часть</th><th>Тип / данные</th><th>Связанные параметры</th></tr></thead><tbody id="parts"><tr><td colspan="3">Нет данных</td></tr></tbody></table></div></div>
+
+<div class="panel"><b>4. Параметры управления</b>
+<p class="sub">Ползунки меняют параметры загруженной модели. Рядом показаны русское назначение и исходный ID.</p>
+<div id="parameters" class="grid"><div class="item muted">Нет данных</div></div></div>
+
+<div class="panel"><b>5. Деформеры и физика</b>
+<p class="sub">Состав и свойства деформирующих элементов и физических настроек.</p>
+<div id="deformers" class="grid"><div class="item muted">Нет данных</div></div></div>
+
+<div class="panel"><b>6. Готовые движения и выражения лица</b>
+<div id="motions" class="grid"></div><div id="expressions" class="actions"></div>
+<div class="actions"><button id="idle" disabled>Включить обычное состояние</button><button id="stop" disabled>Остановить анимацию</button><button id="reset" disabled>Сбросить параметры</button></div></div>
+
+<div class="panel"><b>7. Результат проверки</b><div id="verdict" class="sub">Ожидаю загрузку модели.</div>
+<details style="margin-top:10px"><summary>Показать исходную техническую структуру JSON</summary><pre id="raw">Нет данных</pre></details></div>
+<div class="sub">Iki Engine 0.13.0 · Iki Format 0.12.0 · Требуются интернет, HTTPS и поддержка WebGL2.</div>
+
+<script type="module">
+const $=id=>document.getElementById(id),canvas=$('view'),status=$('status');
+const sampleUrl='https://raw.githubusercontent.com/zeikar/iki/main/examples/playground/public/bob.iki';
+let player=null,motion=null,model=null,raf=null,defaults=[];
+
+/* Перевод технических полей и значений. Исходные ID нигде не переименовываются. */
+const keyRu={
+id:'Идентификатор',name:'Название',description:'Описание',type:'Тип',kind:'Вид',version:'Версия',
+parts:'Части персонажа',parameters:'Параметры управления',motions:'Движения',expressions:'Выражения лица',
+deformers:'Деформеры',physics:'Физические настройки',canvas:'Холст',width:'Ширина',height:'Высота',
+min:'Минимум',max:'Максимум',default:'Значение по умолчанию',value:'Значение',order:'Порядок слоя',
+mesh:'Сетка',texture:'Текстура',color:'Цвет',bindings:'Связи',parameter:'Параметр',channel:'Канал',
+duration:'Длительность',target:'Цель',vertices:'Вершины',indices:'Индексы',weights:'Веса',
+transform:'Преобразование',position:'Положение',rotation:'Поворот',scale:'Масштаб',parent:'Родительский элемент',
+children:'Дочерние элементы',source:'Источник',output:'Результат',settings:'Настройки',groups:'Группы',
+fps:'Кадров в секунду',loop:'Зацикливание',curves:'Кривые',keyframes:'Ключевые кадры',
+opacity:'Непрозрачность',visible:'Видимость',enabled:'Включено',points:'Точки',verticesCount:'Количество вершин',
+indicesCount:'Количество индексов',deformer:'Деформер',meshId:'Идентификатор сетки',
+parameterId:'Идентификатор параметра',textureId:'Идентификатор текстуры',blendMode:'Режим смешивания',
+parentId:'Идентификатор родителя',childrenIds:'Идентификаторы дочерних элементов',pivot:'Точка опоры',
+anchor:'Якорь',offset:'Смещение',angle:'Угол',strength:'Сила',gravity:'Гравитация',
+wind:'Ветер',delay:'Задержка',response:'Отклик',scaleX:'Масштаб по горизонтали',
+scaleY:'Масштаб по вертикали',x:'Координата X',y:'Координата Y',z:'Координата Z'
+};
+const valueRu={
+ArtMesh:'Рисуемая сетка',Mesh:'Сетка',Warp:'Деформирующая сетка',WarpDeformer:'Деформер сетки',
+Rotation:'Вращение',RotationDeformer:'Деформер вращения',Parameter:'Параметр',Part:'Часть персонажа',
+Group:'Группа',Drawable:'Отрисовываемый элемент',Texture:'Текстура',Physics:'Физика',
+PhysicsRig:'Физическая система',Motion:'Движение',Expression:'Выражение лица',
+true:'Да',false:'Нет',linear:'Линейный',bezier:'Кривая Безье',hold:'Удержание',
+normal:'Обычный',multiply:'Умножение',screen:'Осветление',add:'Сложение',
+idle:'Покой',Idle:'Покой',walk:'Ходьба',Walk:'Ходьба',run:'Бег',Run:'Бег',
+jump:'Прыжок',Jump:'Прыжок',talk:'Разговор',Talk:'Разговор',blink:'Моргание',Blink:'Моргание'
+};
+const paramRu={
+ParamAngleX:'Поворот головы влево / вправо',ParamAngleY:'Наклон головы вверх / вниз',
+ParamAngleZ:'Наклон головы в стороны',ParamBodyAngleX:'Поворот корпуса',
+ParamEyeLOpen:'Открытие левого глаза',ParamEyeROpen:'Открытие правого глаза',
+ParamEyeBallX:'Взгляд влево / вправо',ParamEyeBallY:'Взгляд вверх / вниз',
+ParamBrowLY:'Положение левой брови',ParamBrowRY:'Положение правой брови',
+ParamMouthOpenY:'Открытие рта',ParamMouthForm:'Форма рта',
+ParamArmLA:'Положение левой руки',ParamArmRA:'Положение правой руки',
+ParamBreath:'Дыхание',ParamHairFront:'Движение передних волос',
+ParamHairSide:'Движение боковых волос',ParamHairBack:'Движение задних волос',
+ParamBustX:'Движение верхней части корпуса',ParamHeadX:'Положение головы по горизонтали'
+};
+const partRu={
+Head:'Голова',Body:'Тело',Torso:'Туловище',Face:'Лицо',Hair:'Волосы',
+HairFront:'Передние волосы',HairBack:'Задние волосы',HairSide:'Боковые волосы',
+Eye:'Глаз',EyeL:'Левый глаз',EyeR:'Правый глаз',Eyebrow:'Бровь',
+Mouth:'Рот',Nose:'Нос',Ear:'Ухо',Arm:'Рука',ArmL:'Левая рука',ArmR:'Правая рука',
+Hand:'Кисть руки',Leg:'Нога',LegL:'Левая нога',LegR:'Правая нога',
+Foot:'Ступня',Tail:'Хвост',Wing:'Крыло',Shadow:'Тень',Background:'Фон'
+};
+const groupRu={Idle:'Обычное состояние',Nod:'Кивок',Shake:'Покачивание головой',
+Tilt:'Наклон головы',Walk:'Ходьба',Run:'Бег',Jump:'Прыжок',Talk:'Разговор',
+Blink:'Моргание',Look:'Взгляд',Surprised:'Удивление',Angry:'Злость',Sad:'Грусть',Smile:'Улыбка'};
+function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function say(t,cls=''){status.className=cls;status.textContent=t}
+function translateKey(k){
+ if(keyRu[k])return keyRu[k];
+ const spaced=String(k).replace(/([a-z0-9])([A-Z])/g,'$1 $2').replace(/[_-]/g,' ').toLowerCase();
+ return spaced.charAt(0).toUpperCase()+spaced.slice(1);
+}
+function translateValue(v){
+ if(typeof v==='boolean')return v?'Да':'Нет';
+ if(v===null)return 'Не задано';
+ if(typeof v==='number')return String(v);
+ if(typeof v!=='string')return String(v);
+ if(valueRu[v]!==undefined)return valueRu[v];
+ if(partRu[v]!==undefined)return partRu[v];
+ if(groupRu[v]!==undefined)return groupRu[v];
+ return v;
+}
+function displayId(id,kind=''){
+ if(!id)return 'Без названия';
+ const ru=paramRu[id]||partRu[id]||groupRu[id]||valueRu[id];
+ return ru?ru+' <span class="idtag">('+esc(id)+')</span>':esc(id);
+}
+function count(v){return Array.isArray(v)?v.length:(v&&typeof v==='object'?Object.keys(v).length:0)}
+function resize(){const d=Math.min(devicePixelRatio||1,2),w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight);canvas.width=Math.round(w*d);canvas.height=Math.round(h*d)}
+if('ResizeObserver'in window)new ResizeObserver(resize).observe(canvas);resize();
+function stopLoop(){if(raf!==null)cancelAnimationFrame(raf);raf=null}
+function ensureLoop(){if(raf!==null||!motion)return;const tick=t=>{if(!motion){raf=null;return}motion.update(t);raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick)}
+
+function nestedNode(label,value,depth=0,rawKey=''){
+ const node=document.createElement('details');node.className='nested-entry depth-'+Math.min(depth,2);
+ const summary=document.createElement('summary');summary.innerHTML=label;node.append(summary);
+ const content=document.createElement('div');content.className='nested-content';
+ if(Array.isArray(value)){
+   if(!value.length)content.textContent='Список пуст.';
+   else value.forEach((item,i)=>{
+     let itemLabel='Элемент '+(i+1);
+     if(item&&typeof item==='object'){
+       const candidate=item.name||item.description||item.id||item.parameter||item.type;
+       if(candidate)itemLabel=translateValue(candidate)+(item.id&&candidate!==item.id?' · '+item.id:'');
+     }
+     content.append(nestedNode(esc(itemLabel),item,depth+1));
+   });
+ } else if(value&&typeof value==='object'){
+   const entries=Object.entries(value);
+   if(!entries.length)content.textContent='Дополнительных свойств нет.';
+   entries.forEach(([key,val])=>{
+     const labelText=translateKey(key);
+     if(val&&typeof val==='object')content.append(nestedNode(esc(labelText),val,depth+1,key));
+     else{
+       const line=document.createElement('div');line.className='field-line';
+       const name=document.createElement('span');name.className='field-name';name.textContent=labelText+': ';
+       line.append(name,document.createTextNode(translateValue(val)));
+       if(/(^id$|Id$|^parameter$|^target$)/.test(key)){
+         const raw=document.createElement('span');raw.className='idtag';raw.textContent='  ['+String(val)+']';line.append(raw);
+       }
+       content.append(line);
+     }
+   });
+ } else content.textContent=translateValue(value)||'Нет дополнительных данных.';
+ node.append(content);return node;
+}
+function cardDetails(data){
+ const wrap=document.createElement('div');wrap.className='nested-list';
+ if(Array.isArray(data)){
+  if(!data.length){wrap.innerHTML='<div class="empty-note">В этом разделе данные не найдены.</div>';return wrap}
+  data.forEach((item,i)=>{
+   let rawLabel='Элемент '+(i+1),technical='';
+   if(item&&typeof item==='object'){
+    const candidate=item.name||item.description||item.id||item.parameter||item.type;
+    if(candidate){rawLabel=translateValue(candidate);technical=item.id&&item.id!==candidate?' <span class="idtag">('+esc(item.id)+')</span>':''}
+   }
+   wrap.append(nestedNode(esc(rawLabel)+technical,item,0));
+  });
+ } else if(data&&typeof data==='object'){
+  Object.entries(data).forEach(([k,v])=>wrap.append(nestedNode(esc(translateKey(k)),v,0,k)));
+ } else wrap.innerHTML='<div class="empty-note">Дополнительные данные не найдены.</div>';
+ return wrap;
+}
+function renderSummary(){
+ const parts=model.parts||[],params=model.parameters||[],groups=model.motions||{},expressions=model.expressions||[],deformers=model.deformers||[],physics=model.physics||[];
+ const clips=Object.entries(groups).flatMap(([g,a])=>(Array.isArray(a)?a:[]).map((c,i)=>({name:(groupRu[g]||g)+' · движение '+(i+1),group:g,...c})));
+ const cards=[
+ ['Название модели',model.name||'Без названия',{name:model.name||'Без названия',version:model.version??'не указана'}],
+ ['Части персонажа',parts.length,parts],['Параметры управления',params.length,params],
+ ['Группы движений',Object.keys(groups).length+' · движений: '+clips.length,{groups,clips}],
+ ['Выражения лица',expressions.length,expressions],['Деформирующие элементы',count(deformers),deformers],
+ ['Физические настройки',count(physics),physics],['Размер холста',model.canvas?model.canvas.width+' × '+model.canvas.height:'не указан',model.canvas||{}]
+ ];
+ const root=$('summary');root.innerHTML='';
+ cards.forEach(([label,value,data])=>{
+  const card=document.createElement('details');card.className='summary-card';
+  const head=document.createElement('summary'),title=document.createElement('b'),num=document.createElement('span');
+  title.textContent=label;num.className='num';num.textContent=String(value);head.append(title,num);
+  card.append(head,cardDetails(data));root.append(card);
+ });
+}
+function partType(p){
+ if(p.mesh)return 'Сетка персонажа (mesh)';
+ if(p.texture!==undefined)return 'Текстурный элемент';
+ if(p.color)return 'Цветной элемент';
+ return translateValue(p.type||p.kind||'Элемент');
+}
+function renderParts(){
+ const root=$('parts');root.innerHTML='';
+ (model.parts||[]).forEach((p,i)=>{
+  const tr=document.createElement('tr');
+  const name=p.name||p.id||('Часть '+(i+1));
+  const translated=partRu[name]||translateValue(name);
+  const bind=(p.bindings||[]).map(b=>(paramRu[b.parameter]||b.parameter||'Параметр')+' → '+translateValue(b.channel||'канал')).join(', ')||'Прямые связи не указаны';
+  tr.innerHTML='<td>'+esc(translated)+(p.id?'<div class="idtag">'+esc(p.id)+'</div>':'')+'</td><td>'+esc(partType(p))+(p.order!==undefined?' · слой '+esc(p.order):'')+'</td><td>'+esc(bind)+'</td>';
+  root.append(tr);
+ });
+ if(!model.parts?.length)root.innerHTML='<tr><td colspan="3">Части персонажа в модели не найдены.</td></tr>';
+}
+function renderParameters(){
+ const root=$('parameters');root.innerHTML='';defaults=[];
+ (model.parameters||[]).forEach(p=>{
+  const box=document.createElement('div');box.className='item';
+  const title=document.createElement('b');title.textContent=paramRu[p.id]||translateValue(p.name||p.id);
+  const id=document.createElement('div');id.className='idtag';id.textContent='Технический ID: '+p.id;
+  const range=document.createElement('div');range.className='muted';range.textContent='Диапазон: '+(p.min??0)+' — '+(p.max??1);
+  const value=document.createElement('div');value.textContent='Текущее значение: '+Number(p.default??0).toFixed(2);
+  const input=document.createElement('input');input.type='range';input.min=p.min??0;input.max=p.max??1;
+  input.step=Math.max(((p.max??1)-(p.min??0))/300,0.001);input.value=p.default??0;
+  defaults.push({id:p.id,value:Number(p.default??0)});
+  input.addEventListener('input',()=>{const n=Number(input.value);player.setParameter(p.id,n);value.textContent='Текущее значение: '+n.toFixed(2)});
+  box.append(title,id,range,value,input);root.append(box);
+ });
+ if(!(model.parameters||[]).length)root.textContent='В модели не объявлены параметры управления.';
+}
+function renderDeformers(){
+ const root=$('deformers');root.innerHTML='';
+ const add=(title,obj)=>{
+  if(!obj||(!Array.isArray(obj)&&typeof obj!=='object'))return;
+  const arr=Array.isArray(obj)?obj:Object.entries(obj).map(([k,v])=>({id:k,...(v&&typeof v==='object'?v:{value:v})}));
+  arr.forEach((d,i)=>{
+   const box=document.createElement('div');box.className='item';
+   const label=d.name||d.id||title+' '+(i+1);
+   box.innerHTML='<b>'+esc(translateValue(label))+'</b><div>'+esc(title)+' · '+esc(translateValue(d.type||d.kind||'тип не указан'))+'</div><div class="muted">Нажмите для просмотра свойств ниже в общей структуре модели.</div>';
+   root.append(box);
+  });
+ };
+ add('Деформер',model.deformers);add('Физическая настройка',model.physics);
+ if(!root.children.length)root.textContent='Отдельные деформеры и физические настройки не объявлены.';
+}
+function renderMotions(){
+ const root=$('motions');root.innerHTML='';const groups=model.motions||{};let total=0;
+ for(const [g,clips] of Object.entries(groups)){
+  (clips||[]).forEach((clip,i)=>{
+   total++;const box=document.createElement('div');box.className='item';
+   const b=document.createElement('button');b.textContent=(groupRu[g]||translateValue(g))+' · вариант '+(i+1);
+   b.addEventListener('click',()=>{ensureLoop();const ok=motion.playMotion(g,i);say(ok?'Запущено движение: '+(groupRu[g]||g):'Не удалось запустить это движение. Проверьте наличие клипа в модели.',ok?'ok':'warn')});
+   const p=document.createElement('div');p.className='muted';p.textContent=clip.description?translateValue(clip.description):('Группа: '+(groupRu[g]||g)+'; длительность: '+(clip.duration??'не указана'));
+   box.append(b,p);root.append(box);
+  });
+ }
+ if(!total)root.textContent='Готовые клипы движений не найдены.';
+ const ex=$('expressions');ex.innerHTML='';
+ (model.expressions||[]).forEach(e=>{
+  const b=document.createElement('button');const label=e.description||e.name||e.id;
+  b.textContent=translateValue(label);
+  b.addEventListener('click',()=>{ensureLoop();const ok=motion.playExpression(e.id);say(ok?'Включено выражение: '+translateValue(label):'Не удалось включить это выражение.',ok?'ok':'warn')});
+  ex.append(b);
+ });
+ if(!ex.children.length)ex.textContent='Выражения лица в модели не найдены.';
+}
+function renderVerdict(){
+ const p=model.parts||[],pars=model.parameters||[],names=pars.map(x=>x.id),angle=names.filter(x=>/Angle|Head|Body/i.test(x)),limb=names.filter(x=>/Arm|Leg|Hand|Foot|Wing|Tail/i.test(x));
+ $('verdict').innerHTML='<p><b>Обнаружено:</b> '+p.length+' частей персонажа, '+pars.length+' параметров, '+(model.expressions||[]).length+' выражений лица.</p>'+
+ '<p><b>Параметры поворота головы и корпуса:</b> '+(angle.map(x=>paramRu[x]||x+' ['+x+']').join(', ')||'не найдены по стандартным именам')+'.</p>'+
+ '<p><b>Параметры конечностей:</b> '+(limb.map(x=>paramRu[x]||x+' ['+x+']').join(', ')||'не найдены по стандартным именам')+'.</p>'+
+ '<p class="warn"><b>Важно:</b> наличие параметров, сеток и деформеров само по себе не доказывает полноценную ходьбу, подъём руки или поворот персонажа в профиль. Эти действия нужно отдельно проверять на подходящей модели.</p>';
+}
+async function loadJson(json,label){
+ say('Подключаем движок Iki и проверяем файл…');
+ try{
+  const [{IkiPlayer,IkiMotion},{loadIkiModel}]=await Promise.all([
+   import('https://esm.sh/@ikijs/engine@0.13.0?bundle'),
+   import('https://esm.sh/@ikijs/format@0.12.0?bundle')
+  ]);
+  const raw=JSON.parse(json),parsed=loadIkiModel(json),next=new IkiPlayer(canvas),result=await next.load(parsed);
+  if(result?.superseded){next.destroy();throw new Error('Загрузка была прервана другой операцией.')}
+  stopLoop();if(player)player.destroy();player=next;model=parsed;
+  motion=new IkiMotion(model,id=>player.getParameter(id),(id,v)=>player.setParameter(id,v));
+  player.start();renderSummary();renderParts();renderParameters();renderDeformers();renderMotions();renderVerdict();
+  $('raw').textContent=JSON.stringify(raw,null,2);
+  $('idle').disabled=false;$('stop').disabled=false;$('reset').disabled=false;
+  say('Модель загружена: '+label+'. Подписи интерфейса переведены на русский.','ok');
+ }catch(e){say('Ошибка загрузки: '+(e.message||String(e)),'err');$('verdict').textContent='Проверка не завершена: '+(e.message||e)}
+}
+$('sample').addEventListener('click',async()=>{
+ try{say('Загружаем тестовую модель…');const r=await fetch(sampleUrl,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);await loadJson(await r.text(),'bob.iki')}
+ catch(e){say('Не удалось загрузить тестовую модель: '+e.message,'err')}
+});
+$('file').addEventListener('change',async e=>{const f=e.target.files?.[0];if(f)await loadJson(await f.text(),f.name);e.target.value=''});
+$('idle').addEventListener('click',()=>{ensureLoop();say('Обычное состояние включено.','ok')});
+$('stop').addEventListener('click',()=>{stopLoop();say('Воспроизведение анимации остановлено.')});
+$('reset').addEventListener('click',()=>{
+ if(!player)return;stopLoop();motion?.stopExpression?.();
+ defaults.forEach(p=>player.setParameter(p.id,p.value));renderParameters();say('Параметры возвращены к исходным значениям.','ok')
+});
+</script>
+</body>
+</html>
