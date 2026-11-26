@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Киномастер-Ай 2.0 — OpenBone тест v12</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10151e;color:#edf2f7}
+*{box-sizing:border-box}body{margin:0;padding:15px;max-width:980px;margin-inline:auto}
+h1{font-size:22px;margin:4px 0 7px}p{line-height:1.45}.muted{color:#a9b5c5;font-size:13px}
+.panel{background:#192332;border:1px solid #304158;border-radius:15px;padding:14px;margin:12px 0}
+#status{padding:10px 12px;border-radius:10px;background:#263346;color:#dbeafe;font-size:14px}
+#stage{background:#0b1119;border:1px solid #34445b;border-radius:14px;overflow:hidden;min-height:260px}
+openbone-player{display:block;width:100%;height:min(66vw,520px);min-height:280px;max-height:520px}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+button{border:1px solid #526780;background:#26374c;color:#fff;border-radius:11px;padding:12px 10px;font-size:15px;font-weight:600;min-height:46px}
+button:active{transform:scale(.98);background:#38516e}
+input{width:100%;background:#0e1723;border:1px solid #526780;border-radius:11px;color:#fff;padding:13px;font-size:16px;margin:6px 0 9px}
+.command-row{display:grid;grid-template-columns:1fr auto;gap:8px}.command-row button{min-width:105px}
+#log{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c131d;border-radius:10px;padding:10px;min-height:66px;font-size:13px;color:#c4d2e2}
+.tag{display:inline-block;border:1px solid #4a607b;border-radius:999px;padding:3px 8px;font-size:12px;color:#c8d7e9;margin:3px 4px 3px 0}
+@media(max-width:480px){body{padding:12px}.controls{grid-template-columns:1fr 1fr}openbone-player{height:330px;min-height:260px}}
+</style>
+</head>
+<body>
+<h1>Киномастер-Ай 2.0 — проверка OpenBone</h1>
+<p class="muted">Тест v12 · исправление фоновой прокрутки и последовательных русских команд. Отдельная экспериментальная страница.</p>
+<div class="panel">
+  <div id="status">Подготовка загрузки движка…</div>
+  <p class="muted">В этой модели есть скелет из 22 костей, ходьба, атака, приветствие и встроенный скрипт параллаксной прокрутки дороги и заднего плана.</p>
+  <div id="stage"><openbone-player id="player" state-machine="knight" renderer="canvas" scripts="quickjs" fit="contain" background="#9fd0f5"></openbone-player></div>
+  <div class="controls">
+    <button id="idle">Стоять</button><button id="walk">Идти</button>
+    <button id="salute">Приветствовать</button><button id="attack">Атаковать</button>
+  </div>
+</div>
+<div class="panel">
+  <strong>Команда обычным текстом</strong>
+  <p class="muted">Можно написать несколько действий подряд, например: «Иди, потом атакуй, потом остановись». Действия будут выполняться по очереди.</p>
+  <div class="command-row"><input id="command" value="Иди, потом атакуй, потом остановись" aria-label="Команда персонажу"><button id="send">Выполнить</button></div>
+  <span class="tag">Иди</span><span class="tag">Атакуй</span><span class="tag">Поздоровайся</span><span class="tag">Смейся</span><span class="tag">Остановись</span>
+  <div id="log">Ожидаю команду.</div>
+</div>
+<div class="panel">
+  <strong>Что важно проверить</strong>
+  <ul class="muted">
+    <li>Двигается ли фон и дорога вместе с шагами рыцаря.</li>
+    <li>Выполняются ли несколько команд из одной фразы по порядку.</li>
+    <li>Показывается ли честное сообщение, если в модели нет нужного движения (например, смеха).</li>
+  </ul>
+  <p class="muted">Это тестовый рыцарь, не Петрович. Успех подтвердит возможности движка, но не автоматическую подготовку наших рисунков.</p>
+</div>
+<script type="module">
+const MODEL_URL = "https://raw.githubusercontent.com/UXCentury/open-bone/main/examples/knight.obone";
+const statusEl = document.getElementById("status");
+const logEl = document.getElementById("log");
+const player = document.getElementById("player");
+const commandInput = document.getElementById("command");
+let loaded = false;
+let runToken = 0;
+
+function status(message, ok=false) {
+  statusEl.textContent = message;
+  statusEl.style.background = ok ? "#173b32" : "#263346";
+  statusEl.style.color = ok ? "#b9f6d5" : "#dbeafe";
+}
+function log(message) { logEl.textContent = message; }
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+player.addEventListener("openbone-load", () => {
+  loaded = true;
+  status("Движок и модель загружены. Скрипты модели включены.", true);
+  log("Готово. Проверь ходьбу и фоновую прокрутку, затем отправь фразу с несколькими действиями.");
+});
+player.addEventListener("error", e => {
+  status("Ошибка загрузки модели или встроенного скрипта.");
+  log(String(e?.detail?.message || e?.message || e));
+});
+player.addEventListener("openbone-state", e => {
+  const d=e.detail||{};
+  log("Переход состояния: " + (d.from || "начало") + " → " + (d.to || "неизвестно"));
+});
+
+async function boot() {
+  try {
+    status("Загружаем OpenBone Player…");
+    const mod = await import("https://esm.sh/@openbone/player@0.4.13?bundle");
+    mod.definePlayerElement();
+    player.setAttribute("src", MODEL_URL);
+    status("Движок подключён. Загружаем рыцаря и его скрипт окружения…");
+  } catch(err) {
+    status("Не удалось подключить OpenBone Player.");
+    log(err?.stack || err?.message || String(err));
+  }
+}
+
+function parseCommands(raw) {
+  const s=String(raw||"").toLowerCase().replace(/ё/g,"е");
+  const patterns = [
+    {type:"walk", re:/\b(иди|идти|идет|идёт|шага[йть]*|пошел|пошла|пойди|двигайся|пройд[иет]*)\b/g},
+    {type:"salute", re:/\b(поздоровайся|поприветствуй|приветствуй|отдай честь|салютуй|помаши)\b/g},
+    {type:"attack", re:/\b(атакуй|атаковать|атакует|ударь|ударить|бей|нападай|напасть)\b/g},
+    {type:"laugh", re:/\b(смейся|смеяться|посмейся|рассмеяться|хохочи|хохотать)\b/g},
+    {type:"stop", re:/\b(стой|остановись|остановить|останови|прекрати|перестань)\b/g}
+  ];
+  const found=[];
+  for(const p of patterns) {
+    p.re.lastIndex=0;
+    let m;
+    while((m=p.re.exec(s))!==null) found.push({type:p.type,index:m.index});
+  }
+  found.sort((a,b)=>a.index-b.index);
+  return found.filter((item,i)=>i===0 || item.type!==found[i-1].type);
+}
+
+async function execute(raw) {
+  if(!loaded){log("Персонаж ещё загружается. Подожди сообщения о готовности.");return;}
+  const actions=parseCommands(raw);
+  if(!actions.length){log("Не распознал действие. Попробуй: «Иди, атакуй, остановись».");return;}
+  const myToken=++runToken;
+  const names={walk:"ХОДЬБА",salute:"ПРИВЕТСТВИЕ",attack:"АТАКА",laugh:"СМЕХ",stop:"ОСТАНОВКА"};
+  const lines=["Распознано действий: "+actions.map(a=>names[a.type]).join(" → ")];
+  log(lines.join("\n"));
+  for(let i=0;i<actions.length;i++){
+    if(myToken!==runToken)return;
+    const action=actions[i];
+    if(action.type==="walk"){
+      player.setInput("walk",true);
+      lines.push("Выполняется: идти");
+      log(lines.join("\n"));
+      await wait(1800);
+    } else if(action.type==="stop"){
+      player.setInput("walk",false);
+      lines.push("Выполняется: остановиться");
+      log(lines.join("\n"));
+      await wait(500);
+    } else if(action.type==="salute"){
+      player.setInput("walk",false);
+      player.fire("salute");
+      lines.push("Выполняется: приветствие");
+      log(lines.join("\n"));
+      await wait(1900);
+    } else if(action.type==="attack"){
+      player.setInput("walk",false);
+      player.fire("attack");
+      lines.push("Выполняется: атака");
+      log(lines.join("\n"));
+      await wait(1100);
+    } else if(action.type==="laugh"){
+      lines.push("Смех распознан, но в этой модели нет анимации смеха. Для него нужен отдельный клип персонажа.");
+      log(lines.join("\n"));
+      await wait(300);
+    }
+  }
+  if(myToken===runToken) {
+    lines.push("Последовательность команд завершена.");
+    log(lines.join("\n"));
+  }
+}
+function single(type) {
+  const phrases={walk:"иди",stop:"остановись",salute:"поздоровайся",attack:"атакуй"};
+  execute(phrases[type]);
+}
+document.getElementById("idle").addEventListener("click",()=>single("stop"));
+document.getElementById("walk").addEventListener("click",()=>single("walk"));
+document.getElementById("salute").addEventListener("click",()=>single("salute"));
+document.getElementById("attack").addEventListener("click",()=>single("attack"));
+document.getElementById("send").addEventListener("click",()=>execute(commandInput.value));
+commandInput.addEventListener("keydown",e=>{if(e.key==="Enter")execute(commandInput.value);});
+boot();
+</script>
+</body>
+</html>
