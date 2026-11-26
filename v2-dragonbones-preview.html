@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Киномастер-Ай 2.0 — проверка DragonBones</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10151d;color:#edf2f8}
+*{box-sizing:border-box}body{margin:0;padding:18px;max-width:1000px;margin-inline:auto}
+h1{font-size:22px;margin:0 0 8px}p{color:#aeb9c8;line-height:1.45;margin:6px 0 14px}
+.panel{background:#1a2330;border:1px solid #344256;border-radius:14px;padding:14px;margin:12px 0}
+label{display:block;font-size:14px;margin:10px 0;color:#d8e1ec}
+input,select,button{font:inherit;color:inherit}
+input[type=file],select{display:block;width:100%;margin-top:6px;padding:10px;background:#101923;border:1px solid #43536a;border-radius:9px}
+button{border:0;border-radius:10px;background:#3478d4;padding:11px 15px;font-weight:650;margin:8px 8px 0 0}
+button:disabled{opacity:.45}
+#stage{height:min(58vh,520px);min-height:300px;background:#e8edf2;border-radius:12px;overflow:hidden;display:grid;place-items:center}
+#stage canvas{display:block;max-width:100%;max-height:100%}
+#status{font-size:14px;white-space:pre-wrap;color:#b9d5ff}
+.good{color:#7ee0a2!important}.bad{color:#ff9a9a!important}
+.small{font-size:12px;color:#93a2b4}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:130px}
+</style>
+<script type="importmap">
+{"imports":{"pixi.js":"https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.mjs","pixi-dragonbones-runtime":"https://cdn.jsdelivr.net/npm/pixi-dragonbones-runtime@8.0.3/lib/index.mjs"}}
+</script>
+</head>
+<body>
+<h1>Проверка DragonBones → браузер</h1>
+<p>Отдельный испытательный модуль. Он не меняет основную студию и не конвертирует проект. Загрузите три файла, созданные TextRig: скелет, атлас и PNG-текстуру.</p>
+<section class="panel">
+<label>1. Скелетный файл (_ske.json)<input id="ske" type="file" accept=".json,application/json"></label>
+<label>2. Атлас (_tex.json)<input id="atlas" type="file" accept=".json,application/json"></label>
+<label>3. Текстура (_tex.png)<input id="texture" type="file" accept="image/png"></label>
+<button id="load">Загрузить и запустить</button>
+<div id="status" role="status" aria-live="polite">Ожидаю три файла.</div>
+<p class="small">Плеер загружается из открытых CDN-библиотек PixiJS 8 и DragonBones Runtime 8.0.3. Для работы нужен интернет.</p>
+</section>
+<section class="panel">
+<div id="stage"></div>
+<div class="row">
+<label>Анимация<select id="animation" disabled><option>Сначала загрузите риг</option></select></label>
+<label>Скорость<select id="speed" disabled><option value="0.5">0,5×</option><option value="0.75">0,75×</option><option value="1" selected>1×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label>
+</div>
+<button id="play" disabled>▶ Запустить</button><button id="stop" disabled>Ⅱ Пауза</button>
+</section>
+<script type="module">
+const statusEl=document.querySelector('#status');
+const loadBtn=document.querySelector('#load');
+const animSelect=document.querySelector('#animation');
+const speedSelect=document.querySelector('#speed');
+const playBtn=document.querySelector('#play');
+const stopBtn=document.querySelector('#stop');
+const stage=document.querySelector('#stage');
+let app=null,display=null,animationData=[];
+function status(message,kind=''){statusEl.textContent=message;statusEl.className=kind}
+function readJSON(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>{try{resolve(JSON.parse(r.result))}catch(e){reject(new Error('Ошибка JSON в '+file.name+': '+e.message))}};r.onerror=()=>reject(new Error('Не удалось прочитать '+file.name));r.readAsText(file)})}
+function fitDisplay(){
+ if(!display||!app)return;
+ const b=display.getLocalBounds();
+ if(!b.width||!b.height)return;
+ const scale=Math.min((app.screen.width*.78)/b.width,(app.screen.height*.82)/b.height);
+ display.scale.set(scale);
+ display.position.set(app.screen.width/2-(b.x+b.width/2)*scale,app.screen.height*.88-(b.y+b.height)*scale);
+}
+loadBtn.addEventListener('click',async()=>{
+ const skeFile=document.querySelector('#ske').files[0],atlasFile=document.querySelector('#atlas').files[0],imageFile=document.querySelector('#texture').files[0];
+ if(!skeFile||!atlasFile||!imageFile){status('Нужно выбрать все три файла: _ske.json, _tex.json и _tex.png.','bad');return}
+ loadBtn.disabled=true;status('Читаю файлы и загружаю браузерный плеер…');
+ try{
+  const [{Application,Assets,Texture},{PixiFactory}]=await Promise.all([import('pixi.js'),import('pixi-dragonbones-runtime')]);
+  const [ske,atlas]=await Promise.all([readJSON(skeFile),readJSON(atlasFile)]);
+  if(!Array.isArray(ske.armature)||!ske.armature.length)throw new Error('В скелетном JSON не найден массив armature.');
+  const armatureNames=ske.armature.map(a=>a.name).filter(Boolean);
+  if(!armatureNames.length)throw new Error('В скелете не найдено имя персонажа (armature.name).');
+  const armature=ske.armature[0];
+  animationData=(armature.animation||[]).map(a=>a.name).filter(Boolean);
+  if(!animationData.length)throw new Error('В риге пока нет анимаций. Скелет есть, но проигрывать нечего.');
+  if(app){app.destroy();app=null;stage.innerHTML='';display=null}
+  app=new Application();
+  await app.init({resizeTo:stage,background:'#e8edf2',antialias:true,autoDensity:true,resolution:Math.min(window.devicePixelRatio||1,2)});
+  stage.appendChild(app.canvas);
+  const imageUrl=URL.createObjectURL(imageFile);
+  let texture;
+  try{const image=new Image();image.src=imageUrl;await image.decode();texture=Texture.from(image)}finally{URL.revokeObjectURL(imageUrl)}
+  const factory=PixiFactory.factory;
+  const cacheName='kinomaster_test_'+Date.now();
+  const atlasAlias=cacheName+'_atlas';
+  const parsed=factory.parseDragonBonesData(ske,cacheName);
+  if(!parsed)throw new Error('DragonBones не принял скелет. Проверьте версию формата и содержимое _ske.json.');
+  Assets.cache.set(atlasAlias,atlas);
+  factory.parseTextureAtlasData(atlasAlias,texture,cacheName);
+  display=factory.buildArmatureDisplay(armatureNames[0],cacheName);
+  if(!display)throw new Error('Плеер не смог собрать персонажа из скелета и атласа.');
+  app.stage.addChild(display);
+  animSelect.innerHTML='';
+  for(const name of animationData){const option=document.createElement('option');option.value=name;option.textContent=name;animSelect.appendChild(option)}
+  animSelect.disabled=false;speedSelect.disabled=false;playBtn.disabled=false;stopBtn.disabled=false;
+  fitDisplay();
+  display.animation.play(animationData[0],-1);
+  status('УСПЕХ: риг загружен в браузер. Персонаж: '+armatureNames[0]+'. Анимации: '+animationData.join(', ')+'.\nПроверьте движение, переключая анимации и скорость.','good');
+ }catch(e){console.error(e);status('ОШИБКА: '+(e?.message||String(e))+'\nПодробности доступны в консоли браузера.','bad')}
+ finally{loadBtn.disabled=false}
+});
+animSelect.addEventListener('change',()=>{if(display)display.animation.play(animSelect.value,-1)});
+speedSelect.addEventListener('change',()=>{if(display)display.animation.timeScale=Number(speedSelect.value)});
+playBtn.addEventListener('click',()=>{if(display)display.animation.play(animSelect.value||animationData[0],-1)});
+stopBtn.addEventListener('click',()=>{if(display)display.animation.stop()});
+window.addEventListener('resize',fitDisplay);
+</script>
+</body>
+</html>
