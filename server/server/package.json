@@ -1,12 +1,14 @@
+
 {
-“name”: “kinomaster-server”,
-“version”: “1.0.0”,
-“private”: true,
-“type”: “module”,
-“scripts”: {
-“start”: “node server.js”
-},
-“engines”: {
-“node”: “>=20”
+  "name": "kinomaster-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }
-}
+
