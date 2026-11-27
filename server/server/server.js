@@ -1,17 +1,11 @@
+
 import http from "node:http";
-import { SyntxClient } from "syntx-ai-mcp";
 
 const PORT = Number(process.env.PORT || 3000);
 const ACCESS_KEY = process.env.KINOMASTER_ACCESS_KEY;
 const SYNTX_TOKEN = process.env.SYNTX_TOKEN;
-
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
-
-let syntx = null;
-
-if (SYNTX_TOKEN) {
-  syntx = new SyntxClient({ token: SYNTX_TOKEN });
-}
+const SYNTX_API = "https://api.syntx.ai";
 
 function send(res, status, data) {
   res.writeHead(status, {
@@ -56,9 +50,54 @@ function authorized(req) {
   );
 }
 
+async function syntxRequest(path, options = {}) {
+  if (!SYNTX_TOKEN) {
+    throw new Error("SYNTX_TOKEN is not configured");
+  }
+
+  const response = await fetch(`${SYNTX_API}${path}`, {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${SYNTX_TOKEN}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...options.headers
+    },
+    signal: AbortSignal.timeout(120000)
+  });
+
+  const text = await response.text();
+  let data;
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!response.ok) {
+    const error = new Error(
+      data?.message ||
+      data?.detail ||
+      `SYNTX API error: ${response.status}`
+    );
+
+    error.status = response.status;
+    error.details = data;
+    throw error;
+  }
+
+  return data;
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    return send(res, 204, {});
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": FRONTEND_ORIGIN,
+      "Access-Control-Allow-Headers": "Content-Type, X-Kino-Key",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+    });
+    return res.end();
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -67,19 +106,14 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, {
       status: "ok",
       service: "Kinomaster Server",
-      syntx_configured: Boolean(syntx)
+      syntx_configured: Boolean(SYNTX_TOKEN),
+      access_key_configured: Boolean(ACCESS_KEY)
     });
   }
 
   if (!authorized(req)) {
     return send(res, 401, {
       error: "Unauthorized"
-    });
-  }
-
-  if (!syntx) {
-    return send(res, 503, {
-      error: "SYNTX_TOKEN is not configured"
     });
   }
 
@@ -100,13 +134,19 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      const result = await syntx.video.generate(aiName, {
-        chat_id: chatId,
-        prompt,
-        settings: body.settings || {},
-        file_urls: body.file_urls || [],
-        audio_url: body.audio_url || null
-      });
+      const result = await syntxRequest(
+        `/api/v1/video/generate?ai_name=${encodeURIComponent(aiName)}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            chat_id: chatId,
+            prompt,
+            settings: body.settings || {},
+            file_urls: body.file_urls || [],
+            audio_url: body.audio_url || undefined
+          })
+        }
+      );
 
       return send(res, 200, {
         status: "submitted",
@@ -128,9 +168,15 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
+      const encodedChatId = encodeURIComponent(chatId);
+
       const [messages, progress] = await Promise.all([
-        syntx.chats.getMessages(chatId),
-        syntx.chats.getInProgress(chatId)
+        syntxRequest(
+          `/api/v1/chats/${encodedChatId}/messages`
+        ),
+        syntxRequest(
+          `/api/v1/chats/${encodedChatId}/inprogress`
+        )
       ]);
 
       return send(res, 200, {
@@ -147,9 +193,10 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     console.error("Server error:", error);
 
-    return send(res, 500, {
-      error: "Server error",
-      message: error.message
+    return send(res, error.status || 500, {
+      error: "SYNTX request failed",
+      message: error.message,
+      details: error.details || null
     });
   }
 });
@@ -157,3 +204,4 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Kinomaster server listening on port ${PORT}`);
 });
+
