@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101722">
+<title>Киномастер-Ай 2.0 — PixiJS Runtime</title>
+<style>
+:root{color-scheme:dark;--bg:#0d121b;--panel:#171f2d;--panel2:#202b3d;--line:#344258;--text:#eef3fb;--muted:#aab8ca;--accent:#8db7ff;--good:#82d8ad;--warn:#f0c77c}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#0d121b,#172337);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1180px;margin:auto;padding:18px 14px 42px}.head small{color:var(--accent);font-weight:800;letter-spacing:.1em}.head h1{font-size:clamp(25px,5vw,39px);margin:5px 0}.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(270px,.7fr);gap:14px;margin-top:16px}.panel{background:rgba(23,31,45,.96);border:1px solid var(--line);border-radius:16px;padding:15px;min-width:0}.panel h2{font-size:18px;margin:0 0 11px}.stageWrap{position:relative;background:#0a1019;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-height:320px}.stageWrap canvas{display:block;width:100%;height:auto;touch-action:pan-y}.stageLabel{position:absolute;left:10px;top:8px;font-size:12px;color:#c3d1e4;background:#111b2acc;padding:4px 8px;border-radius:20px;pointer-events:none}
+button,.fileBtn{border:0;border-radius:10px;padding:10px 13px;font:700 14px system-ui;cursor:pointer;background:var(--accent);color:#0b1524}.secondary{background:#2b394e;color:var(--text)}button:disabled{opacity:.45;cursor:not-allowed}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}.status{min-height:24px;margin-top:9px;color:var(--good);white-space:pre-wrap;font-size:13px}.status.warn{color:var(--warn)}
+input[type=file]{display:none}.fileBtn{display:inline-flex;align-items:center;gap:7px}.field{margin:10px 0}.field label{display:block;font-weight:650;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;background:#0e1724;color:var(--text);border:1px solid #3b4b64;border-radius:9px;padding:9px 10px;font:inherit}.field textarea{min-height:100px;resize:vertical}.help{font-size:12px;color:var(--muted);margin-top:5px}.tree{display:grid;gap:6px;max-height:290px;overflow:auto}.treeItem{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:#111a28;border:1px solid #2e3b50;border-radius:9px;font-size:13px}.treeItem small{color:var(--muted)}.pill{font-size:11px;padding:2px 7px;border-radius:20px;background:#293b56;color:#c7dcff}.notice{border-left:3px solid var(--warn);padding:10px 11px;background:#29251d;border-radius:8px;color:#eadbbd;font-size:13px;margin-top:12px}.code{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b121d;border:1px solid var(--line);border-radius:9px;padding:10px;font:12px/1.5 ui-monospace,monospace;max-height:260px;overflow:auto}.hidden{display:none!important}.foot{font-size:12px;color:var(--muted);margin-top:14px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}.stageWrap{min-height:280px}.panel{padding:13px}}
+</style>
+</head>
+<body>
+<main>
+<header class="head"><small>КИНОМАСТЕР-Ай 2.0 · ANIMATION CORE</small><h1>PixiJS — движок персонажей</h1><p class="muted">Отдельный тестовый модуль скелетной анимации. Не изменяет старую студию и библиотеку персонажей.</p></header>
+<div class="grid">
+<section class="panel">
+<h2>Сцена анимации</h2>
+<div class="stageWrap"><div class="stageLabel" id="stageLabel">Тестовый манекен · PixiJS</div><div id="stage"></div></div>
+<div class="actions">
+<button id="playBtn">▶ Играть</button><button class="secondary" id="stopBtn">Ⅱ Стоп</button><button class="secondary" id="resetBtn">↺ Сбросить позу</button>
+<select id="motionSelect" aria-label="Выбрать движение" style="background:#202b3d;color:#eef3fb;border:1px solid #40516a;border-radius:10px;padding:9px;min-width:130px"><option value="idle">Покой</option><option value="wave">Мах рукой</option><option value="walk">Ходьба</option><option value="look">Поворот головы</option></select>
+</div>
+<div class="status" id="runtimeStatus">Загрузка PixiJS…</div>
+<div class="notice">Сейчас здесь проверяется именно движок движения и связей частей тела. Тестовый манекен — не готовый персонаж и не результат автоматической нарезки.</div>
+</section>
+<aside class="panel">
+<h2>Персонаж и слои</h2>
+<div class="field"><label for="manifestFile">Загрузить паспорт скелета (.json)</label><input id="manifestFile" type="file" accept=".json,application/json"><label class="fileBtn" for="manifestFile">＋ Выбрать JSON</label><div class="help">Формат описан в шаблоне ниже. Изображения частей тела выбираются отдельно.</div></div>
+<div class="field"><label for="partsFiles">Загрузить PNG-слои персонажа</label><input id="partsFiles" type="file" accept="image/png,image/webp,image/jpeg" multiple><label class="fileBtn secondary" for="partsFiles">＋ Выбрать изображения частей</label><div class="help">Имена файлов должны совпадать с image в JSON. Каждый файл — отдельная часть тела с прозрачным фоном.</div></div>
+<div class="actions"><button class="secondary" id="loadDemoBtn">Показать тестовый скелет</button><button class="secondary" id="templateBtn">Скачать шаблон JSON</button></div>
+<h2 style="margin-top:20px">Иерархия скелета</h2><div class="tree" id="tree"><div class="treeItem"><span>Загрузка…</span></div></div>
+<div class="foot">Поддерживаются произвольные названия частей и родительские связи. Это основа для разных типов анатомии: человек, птица, четвероногое и фантастическое существо.</div>
+</aside>
+</div>
+<section class="panel" style="margin-top:14px">
+<h2>Формат передачи от будущего ИИ-анализатора</h2>
+<p class="muted">Анализатор должен будет автоматически создать слои, определить pivots и связи parent/child, а затем передать этот JSON вместе с PNG-файлами в PixiJS.</p>
+<pre class="code" id="schemaPreview"></pre>
+</section>
+<p class="foot">PixiJS подключается из официального CDN. Для работы необходим интернет. Модуль не отправляет изображения на сервер и не требует SYNTX.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);let app=null,root=null,parts={},tickerFn=null,playing=false,currentMotion='idle',loadedUrls=[];
+const example={schema:'kinomaster.rig.v1',character:{name:'Example Creature',type:'bird',canvas:{width:800,height:900}},layers:[{id:'body',name:'Туловище',image:'body.png',parent:null,pivot:{x:400,y:490},position:{x:400,y:490},z:1},{id:'neck',name:'Шея',image:'neck.png',parent:'body',pivot:{x:400,y:390},position:{x:0,y:-100},z:2},{id:'head',name:'Голова',image:'head.png',parent:'neck',pivot:{x:400,y:300},position:{x:0,y:-90},z:3},{id:'wingL',name:'Левое крыло',image:'wing-left.png',parent:'body',pivot:{x:330,y:450},position:{x:-70,y:-40},z:4},{id:'wingR',name:'Правое крыло',image:'wing-right.png',parent:'body',pivot:{x:470,y:450},position:{x:70,y:-40},z:5},{id:'legL',name:'Левая нога',image:'leg-left.png',parent:'body',pivot:{x:370,y:560},position:{x:-30,y:70},z:6},{id:'legR',name:'Правая нога',image:'leg-right.png',parent:'body',pivot:{x:430,y:560},position:{x:30,y:70},z:7}],motions:{idle:[],walk:[],wing_flap:[]}};
+function status(s,warn=false){$('runtimeStatus').textContent=s;$('runtimeStatus').className='status'+(warn?' warn':'')}
+function showTree(items){const host=$('tree');host.innerHTML='';items.forEach(p=>{const row=document.createElement('div');row.className='treeItem';const a=document.createElement('span');a.textContent=p.name||p.id;const b=document.createElement('small');b.textContent=(p.parent?'↳ '+p.parent:'корень')+' · z '+(p.z??0);row.append(a,b);host.append(row)})}
+function disposeApp(){if(tickerFn&&app)app.ticker.remove(tickerFn);tickerFn=null;if(app){app.destroy(true,{children:true,texture:true,textureSource:true});app=null}root=null;parts={}}
+async function init(){if(!window.PIXI){status('Не удалось загрузить PixiJS. Проверь интернет-соединение.',true);return}disposeApp();app=new PIXI.Application();await app.init({width:800,height:900,backgroundColor:0x101a29,antialias:true,autoDensity:true,resolution:Math.min(window.devicePixelRatio||1,2)});const host=$('stage');host.innerHTML='';host.appendChild(app.canvas);app.canvas.style.width='100%';app.canvas.style.height='auto';app.canvas.style.display='block';root=new PIXI.Container();root.sortableChildren=true;app.stage.addChild(root);drawBackdrop();status('PixiJS загружен. Движок сцены готов.');}
+function drawBackdrop(){const g=new PIXI.Graphics();g.rect(0,0,800,900).fill(0x101a29);for(let x=40;x<800;x+=40)g.moveTo(x,0).lineTo(x,900);for(let y=40;y<900;y+=40)g.moveTo(0,y).lineTo(800,y);g.stroke({color:0x243349,width:1,alpha:.35});g.moveTo(400,0).lineTo(400,900).stroke({color:0x6381a8,width:1,alpha:.35});g.moveTo(0,720).lineTo(800,720).stroke({color:0x6381a8,width:1,alpha:.35});app.stage.addChildAt(g,0)}
+function makeJoint(parent,x,y,color=0x9ec5ff){const c=new PIXI.Graphics();c.circle(0,0,7).fill(color).stroke({color:0x0b1220,width:2});c.position.set(x,y);parent.addChild(c);return c}
+function limb(parent,x1,y1,x2,y2,width,color){const wrap=new PIXI.Container();wrap.position.set(x1,y1);const g=new PIXI.Graphics();g.moveTo(0,0).lineTo(x2-x1,y2-y1).stroke({color,width,cap:'round'});wrap.addChild(g);parent.addChild(wrap);makeJoint(wrap,0,0);makeJoint(wrap,x2-x1,y2-y1);return wrap}
+function rounded(parent,x,y,w,h,r,color){const c=new PIXI.Container();c.position.set(x,y);const g=new PIXI.Graphics();g.roundRect(-w/2,-h/2,w,h,r).fill(color).stroke({color:0x0a1019,width:4});c.addChild(g);parent.addChild(c);return c}
+function drawDemo(){if(!app||!root)return;root.removeChildren();parts={};const puppet=new PIXI.Container();puppet.position.set(400,730);root.addChild(puppet);
+const torso=rounded(puppet,0,-245,142,205,48,0x6f91bc);torso.pivot.set(0,0);parts.torso=torso;
+const neck=rounded(puppet,0,-365,48,65,18,0xd7b48a);parts.neck=neck;
+const head=new PIXI.Container();head.position.set(0,-420);puppet.addChild(head);const hg=new PIXI.Graphics();hg.ellipse(0,0,73,84).fill(0xd8b58e).stroke({color:0x0a1019,width:4});hg.circle(-25,-8,7).fill(0x101722);hg.circle(25,-8,7).fill(0x101722);hg.moveTo(-25,28).quadraticCurveTo(0,45,25,28).stroke({color:0x654b3d,width:5});head.addChild(hg);parts.head=head;
+const armL=limb(puppet,-65,-315,-145,-215,24,0xd8b58e),armR=limb(puppet,65,-315,145,-215,24,0xd8b58e);parts.armL=armL;parts.armR=armR;
+const legL=limb(puppet,-35,-145,-55,-20,31,0x536d8f),legR=limb(puppet,35,-145,55,-20,31,0x536d8f);parts.legL=legL;parts.legR=legR;
+const footL=rounded(puppet,-72,-8,72,28,12,0x8c9fb8),footR=rounded(puppet,72,-8,72,28,12,0x8c9fb8);parts.footL=footL;parts.footR=footR;
+const label=new PIXI.Text({text:'ТЕСТОВЫЙ МАНЕКЕН',style:{fontFamily:'Arial',fontSize:18,fontWeight:'bold',fill:0xc6d8ef}});label.anchor.set(.5);label.position.set(0,70);puppet.addChild(label);
+showTree([{id:'torso',name:'Торс',parent:null,z:1},{id:'neck',name:'Шея',parent:'torso',z:2},{id:'head',name:'Голова',parent:'neck',z:3},{id:'armL',name:'Левая рука',parent:'torso',z:4},{id:'armR',name:'Правая рука',parent:'torso',z:5},{id:'legL',name:'Левая нога',parent:'torso',z:6},{id:'legR',name:'Правая нога',parent:'torso',z:7},{id:'footL',name:'Левая ступня',parent:'legL',z:8},{id:'footR',name:'Правая ступня',parent:'legR',z:9}]);$('stageLabel').textContent='Тестовый манекен · иерархия частей';status('Тестовый скелет создан. Выбери движение и нажми «Играть».');resetPose()}
+function resetPose(){if(!parts.torso)return;for(const p of Object.values(parts)){p.rotation=0;p.position.x=p===parts.armL?-65:p===parts.armR?65:p===parts.legL?-35:p===parts.legR?35:p===parts.footL?-72:p===parts.footR?72:0}parts.head.position.set(0,-420);parts.neck.position.set(0,-365)}
+function stop(){playing=false;if(tickerFn&&app){app.ticker.remove(tickerFn);tickerFn=null} $('playBtn').textContent='▶ Играть'}
+function play(){if(!app||!parts.torso){status('Сначала загрузите тестовый скелет или пакет персонажа.',true);return}stop();playing=true;$('playBtn').textContent='▶ Играет';currentMotion=$('motionSelect').value;const start=performance.now();tickerFn=()=>{const t=(performance.now()-start)/1000;const s=Math.sin(t*5);if(currentMotion==='idle'){parts.head.rotation=Math.sin(t*1.5)*.035;parts.torso.rotation=Math.sin(t*1.2)*.018}if(currentMotion==='wave'){parts.armR.rotation=-.65+Math.sin(t*7)*.55;parts.head.rotation=Math.sin(t*2)*.04}if(currentMotion==='walk'){parts.armL.rotation=s*.45;parts.armR.rotation=-s*.45;parts.legL.rotation=-s*.32;parts.legR.rotation=s*.32;parts.torso.y=-245+Math.abs(s)*5}if(currentMotion==='look'){parts.head.rotation=Math.sin(t*1.7)*.38}};app.ticker.add(tickerFn)}
+function buildFromManifest(manifest,files){if(!app)throw Error('PixiJS ещё не готов');if(!manifest||manifest.schema!=='kinomaster.rig.v1'||!Array.isArray(manifest.layers))throw Error('Неверный формат. Ожидается schema: kinomaster.rig.v1 и массив layers.');const map=new Map([...files].map(f=>[f.name,f]));const nodes={};const pending=[...manifest.layers].sort((a,b)=>(a.z||0)-(b.z||0));for(const layer of pending){const parent=layer.parent?nodes[layer.parent]:root;if(!parent)throw Error('Не найдена родительская часть: '+layer.parent+' (для '+layer.id+')');const node=new PIXI.Container();node.label=layer.id;const f=map.get(layer.image);if(!f)throw Error('Не выбран файл слоя: '+layer.image);const url=URL.createObjectURL(f);loadedUrls.push(url);const texture=PIXI.Texture.from(url);const sprite=new PIXI.Sprite(texture);const px=layer.pivot?.x??texture.width/2,py=layer.pivot?.y??texture.height/2;sprite.anchor.set(px/texture.width,py/texture.height);node.position.set(layer.position?.x??0,layer.position?.y??0);node.rotation=layer.rotation||0;node.scale.set(layer.scale?.x??1,layer.scale?.y??1);node.zIndex=layer.z||0;node.addChild(sprite);parent.addChild(node);nodes[layer.id]=node}
+root.sortableChildren=true;Object.values(nodes).forEach(n=>{if(n.parent)n.parent.sortableChildren=true});parts=nodes;showTree(pending);$('stageLabel').textContent='Персонаж: '+(manifest.character?.name||'без имени');status('Пакет загружен. Слоёв: '+pending.length+'. Для анимации укажите движение в будущем профиле motion.');}
+$('playBtn').onclick=play;$('stopBtn').onclick=stop;$('resetBtn').onclick=()=>{stop();resetPose();status('Поза сброшена.')};$('loadDemoBtn').onclick=()=>{stop();drawDemo()};$('motionSelect').onchange=()=>{if(playing)play()};
+$('manifestFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const manifest=JSON.parse(await f.text());window.__kinoManifest=manifest;status('JSON прочитан. Теперь выбери все PNG-файлы, перечисленные в image.');$('stageLabel').textContent='Ожидаются слои персонажа';}catch(err){status('Ошибка JSON: '+err.message,true)}};
+$('partsFiles').onchange=e=>{if(!window.__kinoManifest){status('Сначала загрузи JSON-паспорт скелета.',true);return}try{stop();buildFromManifest(window.__kinoManifest,e.target.files)}catch(err){status('Не удалось собрать персонажа: '+err.message,true)}};
+$('templateBtn').onclick=()=>{const blob=new Blob([JSON.stringify(example,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kinomaster-rig-template.json';a.click();URL.revokeObjectURL(a.href)};
+$('schemaPreview').textContent=JSON.stringify(example,null,2);
+init().then(()=>drawDemo()).catch(e=>status('Ошибка запуска PixiJS: '+e.message,true));
+})();
+</script>
+</body>
+</html>
