@@ -60,7 +60,9 @@ async function syntxRequest(path, options = {}) {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${SYNTX_TOKEN}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body ? {
+        "Content-Type": "application/json"
+      } : {}),
       ...options.headers
     },
     signal: AbortSignal.timeout(120000)
@@ -97,12 +99,20 @@ const server = http.createServer(async (req, res) => {
       "Access-Control-Allow-Headers": "Content-Type, X-Kino-Key",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
     });
+
     return res.end();
   }
 
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  const url = new URL(
+    req.url,
+    `http://${req.headers.host}`
+  );
 
-  if (req.method === "GET" && url.pathname === "/health") {
+  // Проверка состояния сервера
+  if (
+    req.method === "GET" &&
+    url.pathname === "/health"
+  ) {
     return send(res, 200, {
       status: "ok",
       service: "Kinomaster Server",
@@ -111,6 +121,7 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // Все остальные маршруты требуют ключ доступа
   if (!authorized(req)) {
     return send(res, 401, {
       error: "Unauthorized"
@@ -118,6 +129,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+
+    // ==========================================
+    // СТАРАЯ ВИДЕОГЕНЕРАЦИЯ — СОХРАНЕНА
+    // ==========================================
+
     if (
       req.method === "POST" &&
       url.pathname === "/api/video/start"
@@ -186,6 +202,127 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // ==========================================
+    // НОВЫЙ КОНСТРУКТОР — ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ
+    // ==========================================
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/character/image"
+    ) {
+      const body = await readBody(req);
+
+      const prompt = String(body.prompt || "").trim();
+      const aiName = String(body.ai_name || "").trim();
+      const title = String(
+        body.title || "Kinomaster character"
+      ).trim();
+
+      if (!prompt || !aiName) {
+        return send(res, 400, {
+          error: "Required fields: prompt, ai_name"
+        });
+      }
+
+      // Создаём отдельный чат для персонажа
+      const chat = await syntxRequest(
+        "/api/v1/chats",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title
+          })
+        }
+      );
+
+      const chatUuid =
+        chat?.uuid ||
+        chat?.chat_uuid ||
+        chat?.data?.uuid ||
+        chat?.result?.uuid;
+
+      if (!chatUuid) {
+        return send(res, 502, {
+          error: "SYNTX did not return chat UUID",
+          details: chat
+        });
+      }
+
+      // Настройки генерации изображения
+      const settings = {
+        ...(body.settings || {}),
+        n: 1
+      };
+
+      if (body.model_type) {
+        settings.model_type = body.model_type;
+      }
+
+      if (body.resolution) {
+        settings.resolution = body.resolution;
+      }
+
+      if (body.quality) {
+        settings.quality = body.quality;
+      }
+
+      // Отправляем запрос на генерацию
+      const result = await syntxRequest(
+        `/api/v1/design/generate?ai_name=${encodeURIComponent(aiName)}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            chat_uuid: chatUuid,
+            prompt,
+            settings
+          })
+        }
+      );
+
+      return send(res, 200, {
+        status: "submitted",
+        chat_uuid: chatUuid,
+        result
+      });
+    }
+
+    // ==========================================
+    // НОВЫЙ КОНСТРУКТОР — ПРОВЕРКА ИЗОБРАЖЕНИЯ
+    // ==========================================
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/character/image/status"
+    ) {
+      const chatId = String(
+        url.searchParams.get("chat_id") || ""
+      ).trim();
+
+      if (!chatId) {
+        return send(res, 400, {
+          error: "chat_id is required"
+        });
+      }
+
+      const encodedChatId = encodeURIComponent(chatId);
+
+      const [messages, progress] = await Promise.all([
+        syntxRequest(
+          `/api/v1/chats/${encodedChatId}/messages`
+        ),
+        syntxRequest(
+          `/api/v1/chats/${encodedChatId}/inprogress`
+        )
+      ]);
+
+      return send(res, 200, {
+        chat_id: chatId,
+        messages,
+        progress
+      });
+    }
+
+    // Неизвестный маршрут
     return send(res, 404, {
       error: "Not found"
     });
@@ -202,6 +339,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Kinomaster server listening on port ${PORT}`);
+  console.log(
+    `Kinomaster server listening on port ${PORT}`
+  );
 });
+
 
